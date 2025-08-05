@@ -30,7 +30,7 @@ except ImportError:
             paths = type('obj', (object,), {
                 'database_file': 'data/fixacar_history.db',
                 'maestro_file': 'data/Maestro.xlsx',
-                'equivalencias_file': 'Source_Files/Equivalencias.xlsx'
+                'equivalencias_file': 'data/Equivalencias.xlsx'
             })
         return MockConfig()
 

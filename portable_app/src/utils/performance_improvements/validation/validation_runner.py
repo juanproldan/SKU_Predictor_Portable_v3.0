@@ -24,17 +24,17 @@ def run_full_validation():
     # Set up paths
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(os.path.dirname(current_dir))
-    source_files_path = os.path.join(project_root, "Source_Files")
-    
+    data_files_path = os.path.join(project_root, "data")
+
     print(f"📁 Project Root: {project_root}")
-    print(f"📁 Source Files: {source_files_path}")
+    print(f"📁 Data Files: {data_files_path}")
     
     # Verify source files exist
     required_files = ['Consolidado.json', 'processed_consolidado.db', 'Maestro.xlsx']
     missing_files = []
     
     for file in required_files:
-        file_path = os.path.join(source_files_path, file)
+        file_path = os.path.join(data_files_path, file)
         if not os.path.exists(file_path):
             missing_files.append(file)
         else:

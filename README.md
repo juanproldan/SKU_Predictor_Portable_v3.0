@@ -42,7 +42,7 @@ This is the **v3.0 Portable Python** implementation of the Fixacar SKU Predictor
 │   ├── logs/                       # Application logs
 │   └── main_portable.py           # Entry point
 ├── portable_python/                # Python environment (excluded from Git)
-├── Source_Files/                   # Original data sources
+├── Component launchers/            # Individual component batch files
 └── README.md
 ```
 
