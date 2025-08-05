@@ -24,12 +24,12 @@ echo 3. Run this script again to install packages
 echo.
 
 REM Check if Python is installed
-if exist "portable_python\python_env\python.exe" (
+if exist "portable_python\python_env\Scripts\python.exe" (
     echo Python found! Installing required packages...
     echo.
     
     REM Set Python path
-    set PYTHON_PATH=%CD%\portable_python\python_env\python.exe
+    set PYTHON_PATH=%CD%\portable_python\python_env\Scripts\python.exe
     set PIP_PATH=%CD%\portable_python\python_env\Scripts\pip.exe
     
     echo Installing core packages...

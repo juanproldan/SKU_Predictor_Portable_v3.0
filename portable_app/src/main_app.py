@@ -280,18 +280,17 @@ def get_resource_path(relative_path):
                     return fallback_path
                 return resource_path
     else:
-        # Running as script - point to client directory structure
+        # Running as script - use portable_app directory structure
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(script_dir)  # Go up from src/ to project root
-        client_dir = os.path.join(project_root, "Fixacar_NUCLEAR_DEPLOYMENT", "Fixacar_SKU_Predictor_CLIENT")
-        return os.path.join(client_dir, relative_path)
+        portable_app_root = os.path.dirname(script_dir)  # Go up from src/ to portable_app root
+        return os.path.join(portable_app_root, relative_path)
 
 
 # --- Configuration (using resource path) ---
 DEFAULT_TEXT_PROCESSING_PATH = get_resource_path(os.path.join(
-    "Source_Files", "Text_Processing_Rules.xlsx"))
-DEFAULT_MAESTRO_PATH = get_resource_path(os.path.join("Source_Files", "Maestro.xlsx"))
-DEFAULT_DB_PATH = get_resource_path(os.path.join("Source_Files", "processed_consolidado.db"))
+    "data", "Text_Processing_Rules.xlsx"))
+DEFAULT_MAESTRO_PATH = get_resource_path(os.path.join("data", "Maestro.xlsx"))
+DEFAULT_DB_PATH = get_resource_path(os.path.join("data", "processed_consolidado.db"))
 MODEL_DIR = get_resource_path("models")
 SKU_NN_MODEL_DIR = os.path.join(MODEL_DIR, "sku_nn")
 
@@ -370,7 +369,7 @@ class FixacarApp:
 
             # Initialize year range database optimizer
             try:
-                db_path = get_resource_path(os.path.join("Source_Files", "processed_consolidado.db"))
+                db_path = get_resource_path(os.path.join("data", "processed_consolidado.db"))
                 print(f"🔍 Year range optimizer DB path: {db_path}")
                 print(f"🔍 DB exists: {os.path.exists(db_path)}")
                 self.year_range_optimizer = YearRangeDatabaseOptimizer(db_path)
@@ -389,7 +388,7 @@ class FixacarApp:
             self.optimized_db = None
             # Still try to initialize year range optimizer separately
             try:
-                db_path = get_resource_path(os.path.join("Source_Files", "processed_consolidado.db"))
+                db_path = get_resource_path(os.path.join("data", "processed_consolidado.db"))
                 print(f"🔍 Year range optimizer DB path (fallback): {db_path}")
                 print(f"🔍 DB exists (fallback): {os.path.exists(db_path)}")
                 self.year_range_optimizer = YearRangeDatabaseOptimizer(db_path)
@@ -3545,12 +3544,19 @@ if __name__ == '__main__':
         else:
             print(f"⚠️ {description}: NOT FOUND (will be created)")
 
-    print("\n🖥️ Initializing GUI...")
+# Main execution moved to main() function
+
+def main():
+    """Main entry point for the application"""
+    print("🚀 Starting Fixacar SKU Predictor GUI...")
+
     try:
+        # Create the main window
+        print("🖥️ Creating Tkinter root window...")
         root = tk.Tk()
         print("✅ Tkinter root window created")
 
-        root.title("Fixacar SKU Finder v2.0 (with VIN Predictor)")
+        root.title("Fixacar SKU Finder v3.0 (Portable Python)")
         root.geometry("1200x800")  # Set a reasonable default size
         print("✅ Window title and size set")
 
@@ -3570,10 +3576,14 @@ if __name__ == '__main__':
         print("GUI should now be visible!")
 
         root.mainloop()
+        return True
 
     except Exception as e:
         print(f"❌ Error initializing GUI: {e}")
         import traceback
         traceback.print_exc()
         input("Press Enter to exit...")
-        sys.exit(1)
+        return False
+
+if __name__ == '__main__':
+    main()

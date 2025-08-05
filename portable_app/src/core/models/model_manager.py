@@ -14,9 +14,20 @@ from enum import Enum
 import threading
 from abc import ABC, abstractmethod
 
+# Mock error handling classes (defined first to be available everywhere)
+class ErrorCategory:
+    MODEL_LOADING = "model_loading"
+    PREDICTION = "prediction"
+    DATABASE = "database"
+
+class ErrorSeverity:
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
 try:
     from config.settings import get_config
-    from core.error_handler import get_error_handler, ErrorCategory, ErrorSeverity, handle_exceptions
+    from core.error_handler import get_error_handler, handle_exceptions
 except ImportError:
     # Fallback for development
     def get_config():

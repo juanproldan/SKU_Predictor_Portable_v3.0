@@ -51,22 +51,22 @@ spacy_processor = None
 def get_base_path():
     """Get the base path for the application, works for both script and executable."""
     if getattr(sys, 'frozen', False):
-        # Running as executable - executable is in client folder root
+        # Running as executable - executable is in portable_app root
         return os.path.dirname(sys.executable)
     else:
-        # Running as script - script is in src/, need to find client folder
+        # Running as script - script is in src/, go up to portable_app root
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(script_dir)  # Go up from src/ to project root
-        return os.path.join(project_root, "Fixacar_SKU_Predictor_CLIENT")
+        portable_app_root = os.path.dirname(script_dir)  # Go up from src/ to portable_app root
+        return portable_app_root
 
 BASE_PATH = get_base_path()
-SOURCE_FILES_DIR = os.path.join(BASE_PATH, "Source_Files")
+DATA_DIR = os.path.join(BASE_PATH, "data")
 LOGS_DIR = os.path.join(BASE_PATH, "logs")
 
-# File paths - everything in Source_Files for unified structure
-CONSOLIDADO_PATH = os.path.join(SOURCE_FILES_DIR, "Consolidado.json")
-TEXT_PROCESSING_PATH = os.path.join(SOURCE_FILES_DIR, "Text_Processing_Rules.xlsx")
-OUTPUT_DB_PATH = os.path.join(SOURCE_FILES_DIR, "processed_consolidado.db")
+# File paths - everything in data directory for portable structure
+CONSOLIDADO_PATH = os.path.join(DATA_DIR, "Consolidado.json")
+TEXT_PROCESSING_PATH = os.path.join(DATA_DIR, "Text_Processing_Rules.xlsx")
+OUTPUT_DB_PATH = os.path.join(DATA_DIR, "processed_consolidado.db")
 LOG_PATH = os.path.join(LOGS_DIR, f"consolidado_processing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
 # --- Logging Setup ---
