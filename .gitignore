@@ -58,10 +58,15 @@ Thumbs.db
 *.log
 logs/*.log
 
+# Large data files (exceed GitHub 100MB limit)
+Source_Files/Consolidado.json
+Source_Files/processed_consolidado.db
+portable_app/data/Consolidado.json
+portable_app/data/processed_consolidado.db
+
 # Data files (if sensitive)
-# Uncomment if needed:
-# *.db
-# *.sqlite
+*.db
+*.sqlite
 # *.csv
 
 # Deployment packages
