@@ -21,11 +21,11 @@ echo  [4] 🎯 SKU Trainer              - Train SKU prediction models
 echo  [5] 🖥️  SKU Predictor (Main App) - Run the main application
 echo.
 echo  [T] 🧪 Test Mode                - Run minimal test version
-echo  [S] ⚙️  Setup Environment       - Install Python packages
+echo  [0] ⚙️  Setup Environment       - Install Python packages
 echo.
 echo  [Q] ❌ Quit
 echo.
-set /p choice="  👉 Select an option (1-5, T, S, Q): "
+set /p choice="  👉 Select an option (1-5, T, 0, Q): "
 
 if /i "%choice%"=="1" goto RUN_DOWNLOADER
 if /i "%choice%"=="2" goto RUN_PROCESSOR
@@ -33,7 +33,7 @@ if /i "%choice%"=="3" goto RUN_VIN_TRAINER
 if /i "%choice%"=="4" goto RUN_SKU_TRAINER
 if /i "%choice%"=="5" goto RUN_MAIN_APP
 if /i "%choice%"=="T" goto RUN_TEST
-if /i "%choice%"=="S" goto RUN_SETUP
+if /i "%choice%"=="0" goto RUN_SETUP
 if /i "%choice%"=="Q" goto QUIT
 
 echo.
@@ -80,7 +80,7 @@ goto RETURN_TO_MENU
 :RUN_SETUP
 cls
 echo  🚀 Launching Environment Setup...
-call setup_portable_environment.bat
+call 0_setup_portable_environment.bat
 goto RETURN_TO_MENU
 
 :RETURN_TO_MENU

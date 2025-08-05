@@ -67,9 +67,10 @@ portable_app/data/processed_consolidado.db
 *.sqlite
 # *.csv
 
-# Deployment packages
+# Development artifacts (removed from client deployment)
 deployment_package/
 development_temp/
+test_portable.py
 
 # Test files
 test_*.py
