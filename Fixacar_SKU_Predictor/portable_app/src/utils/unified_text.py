@@ -63,12 +63,28 @@ def _load_abbrev_map() -> Dict[str, str]:
     if 'Abbreviations' not in wb.sheetnames:
         return {}
     sh = wb['Abbreviations']
+
+    # Detect layout by headers:
+    #  A) canonical-first, then Abbr. 1..N (preferred):  [Word | Abbr. 1 | Abbr. 2 | ...]
+    #  B) pair layout: [Abbr | Full]
+    h1 = str(sh.cell(1, 1).value or '').strip().lower()
+    h2 = str(sh.cell(1, 2).value or '').strip().lower()
+    canonical_first = (h1 in {'word', 'canonical', 'full', 'palabra'} or h2.startswith('abbr'))
+
     m: Dict[str, str] = {}
     for row in sh.iter_rows(min_row=2, values_only=True):
         vals = [str(v).strip() for v in row if v is not None and str(v).strip()]
-        if len(vals) >= 2:
-            abbr, full = vals[0], vals[1]
-            m[abbr.lower()] = full.lower()
+        if len(vals) < 2:
+            continue
+        if canonical_first or len(vals) > 2:
+            canonical = _strip_accents(vals[0].lower())
+            for ab in vals[1:]:
+                key = _strip_accents(str(ab).lower())
+                m[key] = canonical
+        else:
+            # pair form: [abbr, full]
+            abbr, full = _strip_accents(vals[0].lower()), _strip_accents(vals[1].lower())
+            m[abbr] = full
     return m
 
 
@@ -202,21 +218,11 @@ def _expand_abbreviations(text: str) -> str:
 
 
 def _apply_equivalencias(text: str) -> str:
-    global _equiv_map_cache
-    if _equiv_map_cache is None:
-        _equiv_map_cache = _load_equiv_map()
-    if not _equiv_map_cache:
-        return text
-    # Phrase-level replacement first (longest aliases first)
-    items = sorted(_equiv_map_cache.items(), key=lambda kv: len(kv[0]), reverse=True)
-    t = text
-    for alias, canonical in items:
-        if alias and alias in t:
-            t = t.replace(alias, canonical)
-    # Token-level fix in case some aliases are single tokens
-    tokens = t.split()
-    tokens = [_equiv_map_cache.get(tok, tok) for tok in tokens]
-    return ' '.join(tokens)
+    """
+    DEPRECATED for normalization: Equivalencias define synonym GROUPS for matching/comparison,
+    not canonicalization. This function is kept as a no-op to avoid breaking imports.
+    """
+    return text
 
 
 def _apply_adjective_agreement(tokens: list[str], noun_gender: Dict[str, str]) -> list[str]:
@@ -277,8 +283,8 @@ def unified_text_preprocessing(text: str) -> str:
     t = _strip_accents(t.lower())
     # Step 3: abbreviations expansion (token-level)
     t = _expand_abbreviations(t)
-    # Step 4: synonyms/equivalencias (phrase + token level)
-    t = _apply_equivalencias(t)
+    # Step 4: RESERVED — Equivalencias are NOT used for normalization.
+    #         They are applied only during matching/comparison as synonym groups.
     # Step 5: linguistic normalization (gender/plural heuristics)
     toks = t.split()
     toks = [_singularize_token(tok) for tok in toks]
