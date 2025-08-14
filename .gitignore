@@ -58,14 +58,13 @@ Thumbs.db
 *.log
 logs/*.log
 
-# Large data files (exceed GitHub 100MB limit)
+# Large data files / duplicates not tracked
 portable_app/data/Consolidado.json
 portable_app/data/processed_consolidado.db
 
-# Data files (if sensitive)
-*.db
-*.sqlite
-# *.csv
+# Canonical Source_Files data to ignore in git (keep in workspace)
+Fixacar_SKU_Predictor/Source_Files/consolidado.json
+Fixacar_SKU_Predictor/Source_Files/processed_consolidado.db
 
 # Development artifacts (removed from client deployment)
 deployment_package/
