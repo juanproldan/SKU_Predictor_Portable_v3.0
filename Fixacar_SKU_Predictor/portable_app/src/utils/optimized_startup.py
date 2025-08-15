@@ -14,7 +14,6 @@ from typing import Dict, Any, Optional
 
 # Provide simple accessors used by main_app
 _data_loader = None
-_spacy_loader = None
 _model_loader = None
 _text_processor = None
 
@@ -134,57 +133,7 @@ class OptimizedDataLoader:
 
         return rules
 
-# spaCy removed: Placeholder retained for backward compatibility, not used.
-class LazySpacyLoader:
-    """Lazy loading for spaCy to improve startup time"""
-    
-    def __init__(self):
-        self._nlp = None
-        self._loading = False
-        self._load_thread = None
-        
-    def _load_spacy_async(self):
-        """Load spaCy in background thread"""
-        try:
-            import spacy
-            self._nlp = spacy.load("es_core_news_sm")
-            print("✅ spaCy loaded asynchronously")
-        except Exception as e:
-            print(f"❌ spaCy async loading failed: {e}")
-        finally:
-            self._loading = False
-    
-    def start_loading(self):
-        """Start loading spaCy in background"""
-        if self._nlp is None and not self._loading:
-            self._loading = True
-            self._load_thread = threading.Thread(target=self._load_spacy_async, daemon=True)
-            self._load_thread.start()
-            print("🧠 spaCy loading started in background...")
-    
-    def get_nlp(self, timeout: float = 30.0) -> Optional[Any]:
-        """Get spaCy nlp object, waiting for loading if necessary"""
-        if self._nlp is not None:
-            return self._nlp
-        
-        if self._loading and self._load_thread:
-            print("⏳ Waiting for spaCy to finish loading...")
-            self._load_thread.join(timeout=timeout)
-        
-        if self._nlp is None:
-            print("🧠 Loading spaCy synchronously (fallback)...")
-            try:
-                import spacy
-                self._nlp = spacy.load("es_core_news_sm")
-            except Exception as e:
-                print(f"❌ spaCy loading failed: {e}")
-                return None
-        
-        return self._nlp
-    
-    def is_ready(self) -> bool:
-        """Check if spaCy is ready to use"""
-        return self._nlp is not None
+# spaCy fully removed: No class or loading
 
 class OptimizedModelLoader:
     """Optimized model loading with compression and caching"""
@@ -289,7 +238,6 @@ class FastTextProcessor:
 
 # Global instances for reuse
 _data_loader = None
-_spacy_loader = None
 _model_loader = None
 _text_processor = None
 

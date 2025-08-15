@@ -54,7 +54,7 @@ PERFORMANCE_IMPROVEMENTS_AVAILABLE = False
 
 # Always-available optimized helpers (not part of perf bundle)
 from utils.optimized_startup import (
-    get_data_loader, get_spacy_loader, get_model_loader,
+    get_data_loader, get_model_loader,
     get_text_processor, initialize_optimizations
 )
 from utils.optimized_database import get_optimized_database
@@ -413,40 +413,8 @@ class FixacarApp:
 
     def enhanced_normalize_text(self, text: str, **kwargs) -> str:
         """
-        Enhanced text normalization using spaCy processor when available.
-        Priority order:
-        1. spaCy processor (NEW - best accuracy for Spanish)
-        2. Smart processor (legacy enhanced)
-        3. Standard normalize_text (fallback)
+        Enhanced text normalization (spaCy fully removed). Use standard normalize_text.
         """
-        # First try spaCy processor (highest priority)
-        if hasattr(self, 'spacy_processor') and self.spacy_processor:
-            try:
-                # Use spaCy for advanced Spanish linguistic processing
-                spacy_result = self.spacy_processor.process_text(text)
-                print(f"  🧠 spaCy processing: '{text}' → '{spacy_result}'")
-                return spacy_result
-            except Exception as e:
-                print(f"⚠️ spaCy processing failed: {e}, trying smart processor...")
-
-        # Fallback to smart processor if available
-        if PERFORMANCE_IMPROVEMENTS_AVAILABLE and self.smart_processor:
-            try:
-                # Use enhanced text processing
-                from utils.performance_improvements.enhanced_text_processing.smart_text_processor import get_smart_processor
-                smart_processor = get_smart_processor()
-
-                # Apply enhanced processing with existing text processor as fallback
-                enhanced_text = smart_processor.process_text_enhanced(text, existing_processor=None)
-
-                # Still apply the original normalize_text for compatibility
-                final_text = normalize_text(enhanced_text, **kwargs)
-
-                return final_text
-            except Exception as e:
-                print(f"⚠️ Enhanced text processing failed, using standard: {e}")
-
-        # Final fallback to standard text processing
         return normalize_text(text, **kwargs)
 
     def expand_synonyms(self, text: str) -> str:
