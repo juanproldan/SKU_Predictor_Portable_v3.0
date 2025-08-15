@@ -13,17 +13,17 @@ echo ========================================
 echo STEP 2: PROCESS CONSOLIDADO (Unified Processor)
 echo ========================================
 
-echo Checking Python...
-python --version >nul 2>&1
+echo Checking Python (Windows Launcher)...
+py -3.11 --version >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] Python not found in PATH. Please install Python or open a terminal where python is available.
+  echo [ERROR] Python 3.11 not found via 'py -3.11'. Please install Python 3.11.
   echo Tip: Run 0_install_packages.bat first.
   pause
   popd
   exit /b 1
 )
 
-python portable_app\src\unified_consolidado_processor.py %* > "%LOGFILE%" 2>&1
+py -3.11 portable_app\src\unified_consolidado_processor.py %* > "%LOGFILE%" 2>&1
 set "ERR=%ERRORLEVEL%"
 type "%LOGFILE%"
 if not "%ERR%"=="0" (

@@ -10,9 +10,9 @@ This is the **v3.0 Portable Python** implementation of the Fixacar SKU Predictor
 
 ### Key Features
 
-- 🧠 **Advanced ML Models**: PyTorch neural networks, Naive Bayes, and ensemble methods
-- 🔍 **Intelligent Text Processing**: spaCy NLP with Spanish language support
-- 📊 **Fuzzy Matching**: Advanced similarity algorithms for part matching
+- 🧠 **Lightweight Models**: VIN lookup + frequency-based SKU prediction (no PyTorch)
+- 🔍 **Intelligent Text Processing**: Rule-based normalization (no spaCy)
+- 📊 **Fuzzy Matching**: Robust text similarity and consensus logic
 - 🎯 **Dual Prediction**: Both SKU and VIN prediction capabilities
 - 📱 **User-Friendly GUI**: Tkinter-based interface for easy operation
 - 🚀 **Portable Deployment**: Self-contained Python environment
@@ -77,8 +77,8 @@ This is the **v3.0 Portable Python** implementation of the Fixacar SKU Predictor
 
 ### Key Components
 
-- **Neural Networks**: PyTorch-based SKU prediction models
-- **Text Processing**: spaCy Spanish NLP pipeline
+- **SKU Prediction**: Frequency lookup and database consensus
+- **Text Processing**: Rule-based Spanish normalization (Excel-driven)
 - **Data Management**: SQLite database with optimized queries
 - **GUI**: Tkinter interface with modern styling
 - **Caching**: Intelligent prediction caching system
@@ -101,8 +101,8 @@ This is the **v3.0 Portable Python** implementation of the Fixacar SKU Predictor
 ## 🛠️ Technical Stack
 
 - **Python**: 3.11 (Portable)
-- **ML Libraries**: PyTorch, scikit-learn
-- **Data**: Polars, NumPy, SQLite (pandas-free client build)
+- **ML Libraries**: None required in client build (VIN lookup + frequency model)
+- **Data**: Polars, SQLite (pandas-free client build)
 - **GUI**: Tkinter
 - **Text Processing**: Rule-based (no spaCy)
 

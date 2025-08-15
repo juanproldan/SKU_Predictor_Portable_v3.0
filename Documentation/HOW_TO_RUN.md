@@ -48,13 +48,13 @@ run_sku_predictor.bat
 - **Output**: VIN models in `portable_app/models/`
 - **When to run**: When you want to retrain VIN prediction models
 
-### **4. 🎯 SKU Trainer**
+### **4. 🎯 SKU Trainer (Frequency Model)**
 - **File**: `4_run_sku_trainer.bat`
-- **Script**: `portable_app/src/train_sku_nn_predictor_pytorch_optimized.py`
-- **Purpose**: Train PyTorch neural network for SKU prediction
-- **Input**: `portable_app/data/processed_consolidado.db`
-- **Output**: SKU models in `portable_app/models/sku_nn/`
-- **When to run**: When you want to retrain SKU prediction models
+- **Script**: `scripts/04_train_sku_model.py`
+- **Purpose**: Build frequency lookup for SKU prediction (no PyTorch/NumPy)
+- **Input**: `Source_Files/processed_consolidado.db`
+- **Output**: SKU lookup in `models/sku/`
+- **When to run**: After processing data or when lookup needs refresh
 
 ### **5. 🖥️ SKU Predictor (Main Application)**
 - **File**: `run_sku_predictor.bat`
@@ -110,10 +110,10 @@ run_sku_predictor.bat
 - `Maestro.xlsx` - Master reference file
 - `Text_Processing_Rules.xlsx` - Text processing rules
 
-### **🧠 Model Files** (`portable_app/models/`)
-- `vin_*.pth` - VIN prediction models (PyTorch)
-- `*.joblib` - Traditional ML models (scikit-learn)
-- `sku_nn/` - SKU neural network models and encoders
+### **🧠 Model Files** (`models/`)
+- `vin/*.joblib` - VIN prediction encoders and models
+- `sku/*.joblib` - SKU frequency lookup model
+- (No PyTorch/NumPy required in client build)
 
 ### **📝 Log Files** (`portable_app/logs/`)
 - Application logs and error messages

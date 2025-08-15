@@ -1,0 +1,275 @@
+=== OVERNIGHT VALIDATION REPORT ===
+DB: C:\Users\juanp\Documents\Python\0_Training\017_Fixacar\020_SKU_Predictor_Portable_v3.0\Fixacar_SKU_Predictor\Source_Files\processed_consolidado.db
+Table counts: {"processed_consolidado": 814009, "sku_year_ranges": 213943, "vin_prefix_frequencies": 25078}
+Top referencias: 30 rows
+Prediction check: PASS=30, MISS=0
+chevrolet | aveo emotion 5 puertas 1.600 | 2011 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATM6262BB060904 | desc='bocel bomper delantero' | norm='bocel parachoqu delantero'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2007 | ref=  | gfreq=12750 | status=PASS
+  VIN=KL1TJ23727B771970 | desc='bomper del.' | norm='parachoqu del'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2011 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATM6262BB060904 | desc='bujes tijera del.' | norm='buj tijera del'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2007 | ref=  | gfreq=12750 | status=PASS
+  VIN=KL1TJ23727B771970 | desc='capot / tapa motor' | norm='capo capo'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='compuerta trasera' | norm='compuerta tra'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='emblema linea compuerta/tapa baul' | norm='emblema linea compuerta tapa baul'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='emblema marca compuerta/tapa baul' | norm='emblema marca compuerta tapa baul'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2007 | ref=  | gfreq=12750 | status=PASS
+  VIN=KL1TJ23727B771970 | desc='farola izq.' | norm='farola izq'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2007 | ref=  | gfreq=12750 | status=PASS
+  VIN=KL1TJ23727B771970 | desc='frontal completo' | norm='frontal completo'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2011 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATM6262BB060904 | desc='guardapolvo eje propulsor del.' | norm='guardapolvo eje propulsor del'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='guia bomper del. der.' | norm='guia parachoqu del der'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='guia bomper del. izq.' | norm='guia parachoqu del izq'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5865CB066367 | desc='impermeabilizante' | norm='impermeabilizante'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='panel tras. inf.' | norm='panel tra inf'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='pegante vidrio' | norm='pegante vidrio'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2007 | ref=  | gfreq=12750 | status=PASS
+  VIN=KL1TJ23727B771970 | desc='persiana' | norm='persiana'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5865CB066367 | desc='puerta trasera izq.' | norm='puert tra izq'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='reflectivo bomper tras. der.' | norm='reflectivo parachoqu tra der'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='reflectivo bomper tras. izq.' | norm='reflectivo parachoqu tra izq'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='sellante carroceria' | norm='sellante carroceria'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2020 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GACE6CD7LB008664 | desc='stop izq.' | norm='stop izq'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo emotion 5 puertas 1.600 | 2011 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATM6262BB060904 | desc='tijera inferior izq.' | norm='tijera inf izq'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo sedan | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5160CB034047 | desc='aceite hidraulico direccion 1/4' | norm='aceite hidraulico direccion 1 4'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo sedan | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5160CB034047 | desc='bocel persiana superior' | norm='bocel persiana sup'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo sedan | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5160CB034047 | desc='bomper del.' | norm='parachoqu del'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo sedan | 2010 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5169AB185210 | desc='bomper trasero' | norm='parachoqu trasero'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo sedan | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5160CB034047 | desc='broches bomper delantero' | norm='broch parachoqu delantero'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo sedan | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5160CB034047 | desc='broches guardapolvo plastico' | norm='broch guardapolvo plast'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo sedan | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5160CB034047 | desc='capot / tapa motor' | norm='capo capo'
+  preds_orig=[' ']
+  preds_norm=[' ']
+chevrolet | aveo sedan | 2012 | ref=  | gfreq=12750 | status=PASS
+  VIN=9GATJ5160CB034047 | desc='emblema persiana' | norm='emblema persiana'
+  preds_orig=[' ']
+  preds_norm=[' ']
+
+=== Noun Gender Analyzer (candidates) ===
+Right-after candidates (likely head nouns):
+rh,32
+cambiado,28
+lh,19
+radiador,11
+persiana,11
+inf,11
+d,6
+sup,5
+parag,5
+inferi,5
+izq,5
+electrico,4
+intern,4
+motor,4
+darech,4
+clip,3
+x2,3
+der,3
+i,3
+ciguen,3
+parachoqu,3
+izqu,3
+del,2
+interno,2
+tot,2
+l,2
+r,2
+fue,2
+post,2
+seccion,2
+exploradora,1
+capo,1
+ant,1
+exterior,1
+identificacion,1
+farola,1
+tapa,1
+deflector,1
+de,1
+bompr,1
+pin,1
+tra,1
+segundo,1
+ca,1
+izquier,1
+rejilla,1
+pint,1
+derech,1
+re,1
+x,1
+exter,1
+limp,1
+iz,1
+ext,1
+int,1
+tornillo,1
+compuerta,1
+silla,1
+cabina,1
+gancho,1
+guardapolvo,1
+gollete,1
+b,1
+u,1
+traser,1
+
+Left-before candidates:
+parag,229
+parachoqu,157
+panel,66
+costado,64
+stop,61
+plast,45
+estribo,36
+guard,35
+panoram,32
+rin,22
+espej,19
+puente,17
+eje,17
+exterior,16
+amortiguador,15
+bocel,10
+lujo,8
+sop,8
+gancho,8
+muelle,8
+del,7
+plumilla,7
+mataburro,7
+emblema,7
+paral,6
+central,6
+fango,6
+soporte,6
+enfocador,5
+inf,5
+lh,5
+g,5
+metalico,5
+paragolpe,4
+rodamiento,4
+absorb,4
+motor,4
+seguridad,4
+direccion,3
+piso,3
+templete,3
+spoiler,3
+retenedor,3
+pito,3
+terminal,3
+sup,3
+exosto,3
+estirage,3
+farola,3
+pla,3
+puent,3
+semieje,3
+empaque,2
+limpiabrisa,2
+lado,2
+freno,2
+capo,2
+pte,2
+cromado,2
+retro,2
+cocuyo,2
+placa,2
+abs,2
+tra,2
+faldon,2
+vidrio,2
+gfango,2
+grifo,2
+reten,2
+cacho,2
+absorber,2
+impac,2
+portallanta,2
+post,2
+parasol,2
+portastop,1
+vierteagua,1
+ant,1
+radiador,1
+portaplaca,1

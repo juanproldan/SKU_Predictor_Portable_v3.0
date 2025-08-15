@@ -14,27 +14,35 @@ REM Get the directory where this batch file is located
 set "BATCH_DIR=%~dp0"
 if "%BATCH_DIR:~-1%"=="\" set "BATCH_DIR=%BATCH_DIR:~0,-1%"
 
-REM Use system Python (manually installed)
-set "PYTHON_EXE=python"
+REM Detect Python 3.11 via Windows launcher first, fall back to python on PATH
+set "PYTHON_CMD="
+set "PY_VER="
 
-echo Using Python: %PYTHON_EXE%
-echo.
-
-REM Verify Python works
-echo Testing Python...
-"%PYTHON_EXE%" --version
-if errorlevel 1 (
-    echo ❌ Python not working! Make sure Python is installed and in your PATH
-    echo    You can download Python from: https://www.python.org/downloads/
-    pause
-    exit /b 1
+echo Detecting Python...
+py -3.11 --version >nul 2>&1
+if not errorlevel 1 (
+    set "PYTHON_CMD=py -3.11"
+    for /f "delims=" %%A in ('py -3.11 --version') do set "PY_VER=%%A"
+) else (
+    python --version >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_CMD=python"
+        for /f "delims=" %%A in ('python --version') do set "PY_VER=%%A"
+    ) else (
+        echo [ERROR] Python 3.11 not found via 'py -3.11' and 'python' not available in PATH.
+        echo Please install Python 3.11 and the Python Launcher from:
+        echo   https://www.python.org/downloads/windows/
+        pause
+        exit /b 1
+    )
 )
-echo ✅ Python is working
+
+echo Using Python: %PYTHON_CMD% (%PY_VER%)
 echo.
 
 REM Upgrade pip first
 echo Upgrading pip...
-"%PYTHON_EXE%" -m pip install --upgrade pip
+%PYTHON_CMD% -m pip install --upgrade pip
 if errorlevel 1 (
     echo ⚠️ Pip upgrade failed, continuing anyway...
 ) else (
@@ -47,12 +55,22 @@ echo Installing modern data science packages...
 echo.
 
 echo [1/5] Installing openpyxl (Excel support)...
-"%PYTHON_EXE%" -m pip install openpyxl
+%PYTHON_CMD% -m pip install openpyxl
 if errorlevel 1 (
     echo ❌ openpyxl installation failed
     goto :error
 )
 echo ✅ openpyxl installed
+
+REM Client build: no NumPy. Ensure Polars only for Step 2 processor
+echo Installing Polars (used by data processor)...
+%PYTHON_CMD% -m pip install polars
+if errorlevel 1 (
+    echo ❌ Polars installation failed
+    goto :error
+)
+echo ✅ Polars installed
+
 
 REM Removed pandas step (full compatibility, no pandas used)
 REM echo [6/10] Installing pandas...
@@ -64,7 +82,7 @@ REM     echo ✅ pandas installed
 REM )
 
 echo [2/5] Installing requests (web requests)...
-"%PYTHON_EXE%" -m pip install requests
+%PYTHON_CMD% -m pip install requests
 if errorlevel 1 (
     echo ❌ requests installation failed
     goto :error
@@ -72,7 +90,7 @@ if errorlevel 1 (
 echo ✅ requests installed
 
 echo [3/5] Installing joblib (model persistence)...
-"%PYTHON_EXE%" -m pip install joblib
+%PYTHON_CMD% -m pip install joblib
 if errorlevel 1 (
     echo ❌ joblib installation failed
     goto :error
@@ -80,7 +98,7 @@ if errorlevel 1 (
 echo ✅ joblib installed
 
 echo [4/5] Installing tqdm (progress bars)...
-"%PYTHON_EXE%" -m pip install tqdm
+%PYTHON_CMD% -m pip install tqdm
 if errorlevel 1 (
     echo ❌ tqdm installation failed
     goto :error
@@ -96,7 +114,6 @@ echo that works on ALL platforms (Windows x64/ARM64, macOS, Linux):
 echo.
 echo ✅ POLARS instead of pandas - 10-30x faster data processing!
 echo ✅ PLOTLY instead of basic matplotlib - Interactive visualizations!
-echo ✅ NUMPY for numerical computing - Universal compatibility!
 echo ✅ MATPLOTLIB for basic plotting - Works everywhere!
 echo.
 echo ADVANTAGES OF THIS STACK:
@@ -118,7 +135,7 @@ echo.
 
 REM Test imports
 echo Testing client package set...
-"%PYTHON_EXE%" -c "import openpyxl, requests, joblib, tqdm, tkinter; print('✅ All client packages imported successfully!')"
+%PYTHON_CMD% -c "import polars, openpyxl, requests, joblib, tqdm, tkinter; print('✅ polars/openpyxl/requests/joblib/tqdm/tk OK')"
 if errorlevel 1 (
     echo ❌ Package import test failed
     goto :error
@@ -127,7 +144,7 @@ if errorlevel 1 (
 echo ✅ Core packages are working correctly!
 echo.
 echo Testing package versions...
-"%PYTHON_EXE%" -c "import openpyxl; import requests, joblib, tqdm; print('✅ Openpyxl/requests/joblib/tqdm OK')"
+%PYTHON_CMD% -c "import polars, openpyxl; import requests, joblib, tqdm; print(f'✅ polars {polars.__version__}, openpyxl {openpyxl.__version__}')"
 echo.
 echo ========================================
 echo 🎉 MODERN DATA SCIENCE STACK COMPLETE!
@@ -137,7 +154,6 @@ echo Your SKU Predictor environment now has a SUPERIOR stack:
 echo.
 echo 🔥 CORE COMPUTING:
 echo - Python 3.11.8 ✅
-echo - NumPy (numerical computing) ✅
 echo - tkinter (GUI framework) ✅
 echo.
 echo 🚀 DATA PROCESSING (Better than pandas):
@@ -153,7 +169,7 @@ echo 🤖 UTILITIES AND PERSISTENCE:
 echo - joblib (model persistence) ✅
 echo - tqdm (progress bars) ✅
 echo.
-echo 
+echo
 echo.
 echo NEXT STEP: Run test_complete_setup.bat to verify everything works!
 echo.

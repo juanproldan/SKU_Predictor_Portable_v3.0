@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "algorithm": "nearest-key(mode)",
+  "features": [
+    "wmi",
+    "vds"
+  ],
+  "n_rows": 61027,
+  "n_keys": 1273,
+  "elapsed_s": 0.302
+}

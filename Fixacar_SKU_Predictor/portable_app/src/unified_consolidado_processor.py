@@ -153,18 +153,18 @@ def clean_vin_for_training(vin):
     """
     if not vin:
         return None
-    
+
     # Convert to string and clean, with canonicalization
     vin_str = canonicalize_vin_chars(vin)
 
     # Basic format validation
     if not validate_vin_format(vin_str):
         return None
-    
+
     # Optional: Check digit validation (commented out as it may be too strict)
     # if not validate_vin_check_digit(vin_str):
     #     return None
-    
+
     return vin_str
 
 # --- Database Setup ---
@@ -250,7 +250,7 @@ def setup_database(db_path):
         conn.commit()
         logger.info("Fresh database and 'processed_consolidado' table created successfully.")
         return conn
-        
+
     except Exception as e:
         logger.error(f"Error setting up database: {e}")
         if 'conn' in locals():
@@ -264,11 +264,11 @@ def load_equivalencias_map(text_processing_path):
     Returns dictionary mapping original terms to normalized terms.
     """
     logger = logging.getLogger(__name__)
-    
+
     if not os.path.exists(text_processing_path):
         logger.warning(f"Text processing rules file not found at {text_processing_path}")
         return {}
-    
+
     try:
         wb = openpyxl.load_workbook(text_processing_path, data_only=True)
         sh = wb['Equivalencias']
@@ -728,6 +728,73 @@ def aggregate_sku_year_ranges(conn):
     return aggregated_count
 
 
+# --- VIN prefix frequency table (for VIN analysis and QA) ---
+def build_vin_prefix_frequencies(conn: sqlite3.Connection) -> int:
+    """Create table with VIN prefix (first 11 chars masked) frequencies per maker/model/series.
+    Uses strict VIN validation: length==17, allowed charset (no I/O/Q), and no character
+    repeated more than 4 times consecutively. Counts DISTINCT VINs to avoid per-item
+    multiplication. Returns number of rows inserted.
+    """
+    import re
+    cur = conn.cursor()
+
+    def _is_valid_vin(vin: str) -> int:
+        if not vin:
+            return 0
+        try:
+            v = str(vin).strip().upper()
+        except Exception:
+            return 0
+        if len(v) != 17:
+            return 0
+        # Allowed characters; exclude I, O, Q
+        if not re.match(r'^[A-HJ-NPR-Z0-9]{17}$', v):
+            return 0
+        # Reject VINs with any character repeated >4 times consecutively
+        if re.search(r'(.)\1{4,}', v):
+            return 0
+        return 1
+
+    # Register VIN validator as SQLite UDF
+    conn.create_function("is_valid_vin", 1, _is_valid_vin)
+
+    # Rebuild table
+    cur.execute('DROP TABLE IF EXISTS vin_prefix_frequencies')
+    cur.execute(
+        '''
+        CREATE TABLE vin_prefix_frequencies (
+            vin_mask TEXT,
+            maker TEXT,
+            model INTEGER,
+            series TEXT,
+            frequency INTEGER,
+            PRIMARY KEY (vin_mask, maker, model, series)
+        )
+        '''
+    )
+
+    cur.execute(
+        '''
+        INSERT OR REPLACE INTO vin_prefix_frequencies (vin_mask, maker, model, series, frequency)
+        SELECT SUBSTR(UPPER(vin_number), 1, 11) || 'XXXXXX' AS vin_mask,
+               maker, model, series,
+               COUNT(DISTINCT UPPER(vin_number)) AS frequency
+        FROM processed_consolidado
+        WHERE vin_number IS NOT NULL
+          AND maker IS NOT NULL AND model IS NOT NULL AND series IS NOT NULL
+          AND is_valid_vin(vin_number)
+        GROUP BY vin_mask, maker, model, series
+        '''
+    )
+
+    # Index for lookup performance
+    cur.execute('CREATE INDEX idx_vin_mask_lookup ON vin_prefix_frequencies (vin_mask, maker, model, series)')
+    conn.commit()
+
+    cur.execute('SELECT COUNT(*) FROM vin_prefix_frequencies')
+    return cur.fetchone()[0]
+
+
 
 
 # --- Main Processing Logic ---
@@ -1067,6 +1134,11 @@ def main(verbose: bool = False):
             sku_ranges_created = aggregate_sku_year_ranges(conn)
             logger.info(f"✅ SKU year range aggregation complete: {sku_ranges_created:,} SKU ranges")
 
+            # Build VIN prefix frequency table for VIN analytics/QA
+            logger.info("🔄 Building VIN prefix frequency table...")
+            vin_prefix_rows = build_vin_prefix_frequencies(conn)
+            logger.info(f"✅ VIN prefix table built: {vin_prefix_rows:,} rows")
+
             # Final database statistics
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM processed_consolidado")
@@ -1102,6 +1174,7 @@ def main(verbose: bool = False):
                     'VIN Training Ready': f"{vin_training_ready:,}",
                     'SKU Training Ready': f"{sku_training_ready:,}",
                     'SKU Year Ranges': f"{sku_year_ranges:,}",
+                    'VIN Prefix Rows': f"{vin_prefix_rows:,}",
                     'Database Path': OUTPUT_DB_PATH
                 }
                 log_operation_complete(logger, "Complete Processing Pipeline", total_time, final_stats)
@@ -1111,6 +1184,7 @@ def main(verbose: bool = False):
                 logger.info(f"Records ready for VIN training: {vin_training_ready:,}")
                 logger.info(f"Records ready for SKU training: {sku_training_ready:,}")
                 logger.info(f"SKU year ranges created: {sku_year_ranges:,}")
+                logger.info(f"VIN prefix frequency rows: {vin_prefix_rows:,}")
                 logger.info(f"Total processing time: {total_time:.1f}s")
                 logger.info(f"Database created successfully: {OUTPUT_DB_PATH}")
 

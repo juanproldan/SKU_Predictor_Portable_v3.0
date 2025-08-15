@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""
+01_sync_consolidado.py
+
+Purpose:
+- Ensure Source_Files/ exists with required inputs:
+  - consolidado.json
+  - Text_Processing_Rules.xlsx
+  - Maestro.xlsx
+  - processed_consolidado.db (created in step 02)
+
+Behavior:
+- Validates presence; prints clear instructions if missing.
+- Optionally seeds minimal sample data when --seed is provided (dev/testing only).
+
+This script does not download from remote by default (no URL provided).
+"""
+import json
+from pathlib import Path
+import argparse
+from datetime import datetime
+
+import os
+import shutil
+import tempfile
+from typing import Optional, Dict
+
+try:
+    import requests  # used only when --download is requested
+except Exception:
+    requests = None
+
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "Source_Files"
+SRC.mkdir(parents=True, exist_ok=True)
+
+REQUIRED = [
+    SRC / "consolidado.json",
+    SRC / "Text_Processing_Rules.xlsx",
+    SRC / "Maestro.xlsx",
+]
+
+
+def seed_minimal():
+    """Create minimal test consolidado.json only.
+    NOTE: We never create Text_Processing_Rules.xlsx or Maestro.xlsx here.
+    """
+    data = {
+        "generated_at": datetime.utcnow().isoformat(),
+        "records": [
+            {"vin": "1HGCM82633A123456", "sku": "SKU-001", "price": 199.99, "brand": "BrandA", "maker": "Honda", "model": "Accord", "series": "EX"},
+            {"vin": "1HGCM82633A654321", "sku": "SKU-002", "price": 249.99, "brand": "BrandB", "maker": "Honda", "model": "Accord", "series": "LX"},
+            {"vin": "JTDKN3DU0A0123456", "sku": "SKU-003", "price": 299.99, "brand": "BrandC", "maker": "Toyota", "model": "Prius", "series": "III"},
+        ]
+    }
+    with open(SRC / "consolidado.json", "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+def load_config() -> Dict[str, str]:
+    cfg_path = SRC / "config.json"
+    if cfg_path.exists():
+        try:
+            return json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def download_file(url: str, target: Path) -> None:
+    if not requests:
+        raise SystemExit("requests not installed; run 1_install_packages.bat")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with requests.get(url, stream=True, timeout=120) as r:
+        r.raise_for_status()
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    tmp.write(chunk)
+            tmp_path = Path(tmp.name)
+    shutil.move(tmp_path, target)
+
+
+
+    # Deprecated: creation now handled above with existence check (no overwrite)
+    pass
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seed", action="store_true", help="Create minimal sample Source_Files for testing")
+    ap.add_argument("--download", action="store_true", help="Download consolidado.json from URL in Source_Files/config.json or CONSOLIDADO_URL env var")
+    args = ap.parse_args()
+
+    cfg = load_config()
+
+    if args.seed:
+        seed_minimal()
+
+    # Optional download if requested
+    if args.download:
+        url = os.environ.get("CONSOLIDADO_URL") or cfg.get("consolidado_url")
+        if not url:
+            print("[ERROR] --download specified but no URL found. Set CONSOLIDADO_URL env var or Source_Files/config.json {\"consolidado_url\": ""...""}.")
+            raise SystemExit(2)
+        print(f"[INFO] Downloading consolidado.json from: {url}")
+        try:
+            download_file(url, SRC / "consolidado.json")
+        except Exception as e:
+            print("[ERROR] Download failed:", e)
+            raise SystemExit(3)
+
+    print("[INFO] Validating Source_Files contents...")
+    missing = [p for p in REQUIRED if not p.exists()]
+
+    if missing:
+        print("[ERROR] Missing required files:")
+        for m in missing:
+            print(f"   - {m.relative_to(ROOT)}")
+        print("\nPlease place these files into Source_Files/ or run with --seed for minimal test data.")
+        raise SystemExit(1)
+
+    print("[OK] Source_Files validation passed.")
+
+
+if __name__ == "__main__":
+    main()
+
