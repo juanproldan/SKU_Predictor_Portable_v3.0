@@ -23,9 +23,6 @@ def get_data_loader():
         _data_loader = OptimizedDataLoader()
     return _data_loader
 
-def get_spacy_loader():
-    # spaCy removed from project; return None
-    return None
 
 def get_model_loader():
     global _model_loader
@@ -247,10 +244,6 @@ def get_data_loader() -> OptimizedDataLoader:
     if _data_loader is None:
         _data_loader = OptimizedDataLoader()
     return _data_loader
-
-def get_spacy_loader():
-    """spaCy removed; return None to avoid background loading messages"""
-    return None
 
 def get_model_loader() -> OptimizedModelLoader:
     """Get global model loader instance"""

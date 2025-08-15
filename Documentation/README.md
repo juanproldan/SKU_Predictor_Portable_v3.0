@@ -101,10 +101,10 @@ This is the **v3.0 Portable Python** implementation of the Fixacar SKU Predictor
 ## 🛠️ Technical Stack
 
 - **Python**: 3.11 (Portable)
-- **ML Libraries**: PyTorch, scikit-learn, spaCy
-- **Data**: Pandas, NumPy, SQLite
+- **ML Libraries**: PyTorch, scikit-learn
+- **Data**: Polars, NumPy, SQLite (pandas-free client build)
 - **GUI**: Tkinter
-- **Text Processing**: spaCy Spanish model
+- **Text Processing**: Rule-based (no spaCy)
 
 ## 📈 Roadmap
 

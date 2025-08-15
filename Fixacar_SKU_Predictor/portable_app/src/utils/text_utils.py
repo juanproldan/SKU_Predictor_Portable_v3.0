@@ -311,10 +311,6 @@ def normalize_text(text: str, use_fuzzy: bool = False, expand_linguistic_variati
     return text
 
 
-# Deprecated: spaCy removed from project; keep alias that calls standard normalization
-
-def normalize_text_with_spacy(text: str) -> str:
-    return normalize_text(text, use_fuzzy=False, expand_linguistic_variations=True, use_spacy=False)
 
 
 def normalize_text_legacy(text: str) -> str:
@@ -327,7 +323,7 @@ def normalize_text_legacy(text: str) -> str:
     Returns:
         Normalized text using legacy manual processing
     """
-    return normalize_text(text, use_fuzzy=False, expand_linguistic_variations=True, use_spacy=False)
+    return normalize_text(text, use_fuzzy=False, expand_linguistic_variations=True)
 
 
 def expand_comprehensive_abbreviations(text: str) -> str:
