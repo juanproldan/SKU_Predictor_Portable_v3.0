@@ -252,10 +252,9 @@ def smart_dot_handling(text: str) -> str:
     return text
 
 
-def normalize_text(text: str, use_fuzzy: bool = False, expand_linguistic_variations: bool = True, use_spacy: bool = True) -> str:
+def normalize_text(text: str, use_fuzzy: bool = False, expand_linguistic_variations: bool = True) -> str:
     """
-    Normalizes a text string according to the project's requirements:
-    - NEW: Uses spaCy for advanced Spanish linguistic processing (gender agreement, POS tagging)
+    Normalizes a text string according to the project's requirements without spaCy:
     - Smart dot handling (converts dots between letters to spaces)
     - Converts to lowercase.
     - Removes leading/trailing whitespace.
@@ -268,7 +267,6 @@ def normalize_text(text: str, use_fuzzy: bool = False, expand_linguistic_variati
         text: The input text to normalize
         use_fuzzy: Whether to use enhanced fuzzy normalization (default: False)
         expand_linguistic_variations: Whether to expand abbreviations, gender, plurals (default: True)
-        use_spacy: Whether to use spaCy for advanced linguistic processing (default: True)
 
     Returns:
         Normalized text string
