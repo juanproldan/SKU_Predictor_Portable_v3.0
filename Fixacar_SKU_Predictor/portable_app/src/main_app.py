@@ -336,12 +336,8 @@ class FixacarApp:
         try:
             print("🚀 Initializing startup optimizations...")
 
-            # Initialize global optimizations
+            # Initialize global optimizations (spaCy disabled)
             initialize_optimizations()
-
-            # Start spaCy loading in background
-            spacy_loader = get_spacy_loader()
-            spacy_loader.start_loading()
 
             # Initialize optimized database
             self.optimized_db = get_optimized_database()
