@@ -42,16 +42,16 @@ def load_sku_aggregates_from_db():
         conn.close()
 
 
-def hash_feature(col: list[str], dim: int = 16) -> np.ndarray:
+def hash_feature(col: list[str], dim: int = 16):
     # Simple hashing trick to encode categorical variables
-    # Produces a dense (n, dim) array
+    # Returns list[list[float]] for portability (no NumPy dependency)
     n = len(col)
-    out = np.zeros((n, dim), dtype=float)
+    out = [[0.0 for _ in range(dim)] for _ in range(n)]
     for i, val in enumerate(col):
         s = (val or "").lower()
         h = abs(hash(s))
         idx = h % dim
-        out[i, idx] = 1.0
+        out[i][idx] = 1.0
     return out
 
 
