@@ -1135,9 +1135,9 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print("\n" + "="*60)
-    print("🎉 CONSOLIDADO PROCESSING COMPLETED SUCCESSFULLY!")
+    print("CONSOLIDADO PROCESSING COMPLETED SUCCESSFULLY!")
     print("="*60)
-    print(f"📁 Database created: processed_consolidado.db")
-    print(f"📊 Ready for VIN and SKU training")
-    print(f"📝 Check logs for detailed statistics")
+    print("Database created: processed_consolidado.db")
+    print("Ready for VIN and SKU training")
+    print("Check logs for detailed statistics")
     print("="*60)
