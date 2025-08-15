@@ -28,14 +28,22 @@ import datetime  # For timestamping Maestro entries
 from zoneinfo import ZoneInfo  # For Bogota timezone
 import json  # For loading consolidado
 import joblib  # To load trained models
-import numpy as np  # For model input reshaping
 import re  # For VIN validation
 from datetime import timezone, timedelta
-# Make torch optional (we won't use NN in Path A)
-try:
-    import torch  # For PyTorch (optional)
-except Exception:
-    torch = None
+# Remove NumPy and torch dependencies in client GUI build
+torch = None
+
+# Small helper to detect array-like objects without importing NumPy
+def _is_array_like(x) -> bool:
+    try:
+        # Common duck-typing: has __len__ and __getitem__ and is not a str/bytes
+        if isinstance(x, (str, bytes)):
+            return False
+        _ = len(x)
+        _ = x[0] if _ > 0 else None
+        return True
+    except Exception:
+        return False
 
 # Excel I/O
 import openpyxl
@@ -1533,20 +1541,8 @@ class FixacarApp:
         if data_dir and not os.path.exists(data_dir):
             os.makedirs(data_dir, exist_ok=True)
         if not os.path.exists(file_path):
-            print(
-                f"Maestro file not found at {file_path}. Creating a new one with headers.")
-            try:
-                import openpyxl
-                wb = openpyxl.Workbook()
-                sh = wb.active
-                sh.title = 'Sheet1'
-                sh.append(maestro_columns)
-                wb.save(file_path)
-                return []
-            except Exception as e:
-                print(
-                    f"Error creating Maestro.xlsx: {e}. Maestro data will be empty.")
-                return []
+            # Hard fail: these files must always exist
+            raise FileNotFoundError(f"Required Maestro.xlsx not found at {file_path}")
         try:
             import openpyxl
             wb = openpyxl.load_workbook(file_path, data_only=True)
@@ -2184,11 +2180,20 @@ class FixacarApp:
                 # Use self.vehicle_details which is now PREDICTED
                 predicted_make_val = self.vehicle_details.get('maker', 'N/A')
 
-                # Cache disabled - proceed with fresh predictions
-                if isinstance(predicted_make_val, np.ndarray):
-                    maker_raw = str(predicted_make_val.item()) if predicted_make_val.size > 0 else 'N/A'
-                else:
-                    maker_raw = str(predicted_make_val) if (predicted_make_val is not None and str(predicted_make_val).strip() != '') else 'N/A'
+                # Derive maker_raw safely for both scalar and array-like values
+                try:
+                    if _is_array_like(predicted_make_val):
+                        try:
+                            val = predicted_make_val[0] if len(predicted_make_val) > 0 else ''
+                        except Exception:
+                            val = predicted_make_val
+                    else:
+                        val = predicted_make_val
+                    maker_raw = str(val).strip() if val is not None else 'N/A'
+                    if maker_raw == '':
+                        maker_raw = 'N/A'
+                except Exception:
+                    maker_raw = 'N/A'
 
                 # Fix make case - database AND Maestro use proper case, not uppercase
                 # Based on database analysis: 'Renault', 'Chevrolet', 'Ford', 'Mazda', etc.
@@ -2212,8 +2217,11 @@ class FixacarApp:
                 model_str = self.vehicle_details.get('model', 'N/A')
                 model = None  # Initialize
                 # Check if it's still an array element
-                if isinstance(model_str, np.ndarray):
-                    model_str_scalar = model_str.item()  # Extract scalar value
+                if _is_array_like(model_str):
+                    try:
+                        model_str_scalar = model_str[0]
+                    except Exception:
+                        model_str_scalar = str(model_str)
                 else:
                     model_str_scalar = model_str  # Use as is if already scalar/string
 
@@ -2230,8 +2238,11 @@ class FixacarApp:
 
                 # Get predicted series for matching
                 predicted_series_val = self.vehicle_details.get('series', 'N/A')
-                if isinstance(predicted_series_val, np.ndarray):
-                    series = str(predicted_series_val.item()) if predicted_series_val.size > 0 else 'N/A'
+                if _is_array_like(predicted_series_val):
+                    try:
+                        series = str(predicted_series_val[0]) if len(predicted_series_val) > 0 else 'N/A'
+                    except Exception:
+                        series = str(predicted_series_val)
                 else:
                     series = str(predicted_series_val) if (predicted_series_val is not None and str(predicted_series_val).strip() != '') else 'N/A'
 
@@ -3021,7 +3032,7 @@ class FixacarApp:
             if not is_duplicate:
                 # Extract and convert year to integer
                 model = selection['vin_details'].get('model')
-                if isinstance(model, (list, tuple, np.ndarray)):
+                if isinstance(model, (list, tuple)) or _is_array_like(model):
                     model = model[0] if len(model) > 0 else None
                 if isinstance(model, str):
                     try:
@@ -3094,7 +3105,7 @@ if __name__ == '__main__':
     current_dir = os.getcwd()
     print(f"Current working directory: {current_dir}")
     print(f"Expected Text_Processing_Rules.xlsx at: {os.path.join(current_dir, DEFAULT_TEXT_PROCESSING_PATH)}")
-    print(f"Expected/Creating Maestro.xlsx at: {os.path.join(current_dir, DEFAULT_MAESTRO_PATH)}")
+    print(f"Expected Maestro.xlsx at: {os.path.join(current_dir, DEFAULT_MAESTRO_PATH)}")
     print(f"Expected fixacar_history.db at: {os.path.join(current_dir, DEFAULT_DB_PATH)}")
 
     # Check if critical files exist
@@ -3111,7 +3122,7 @@ if __name__ == '__main__':
             size_mb = os.path.getsize(full_path) / (1024 * 1024)
             print(f"✅ {description}: {size_mb:.1f} MB")
         else:
-            print(f"⚠️ {description}: NOT FOUND (will be created)")
+            print(f"❌ {description}: NOT FOUND")
 
 # Main execution moved to main() function
 

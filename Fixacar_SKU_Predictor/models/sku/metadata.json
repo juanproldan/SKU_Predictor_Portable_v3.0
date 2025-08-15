@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "algorithm": "sku_year_range_frequency",
+  "n_rows": 205113,
+  "n_keys_exact": 311491,
+  "n_keys_normalized": 308175,
+  "elapsed_s": 13.569
+}

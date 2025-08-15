@@ -32,18 +32,15 @@ if exist "portable_python\python_env\Scripts\python.exe" (
     set PYTHON_PATH=%CD%\portable_python\python_env\Scripts\python.exe
     set PIP_PATH=%CD%\portable_python\python_env\Scripts\pip.exe
     
-    echo Installing core packages...
-    "%PIP_PATH%" install numpy pandas scikit-learn
-    
-    echo Installing ML packages...
-    "%PIP_PATH%" install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-    
-    echo Installing NLP packages...
-    "%PIP_PATH%" install spacy
-    "%PYTHON_PATH%" -m spacy download es_core_news_sm
-    
-    echo Installing utility packages...
-    "%PIP_PATH%" install openpyxl xlrd fuzzywuzzy python-levenshtein
+    echo Installing core packages (client build)...
+    "%PIP_PATH%" install polars openpyxl requests joblib tqdm
+
+    REM No NumPy/pandas/scikit-learn/torch in client build
+
+    REM spaCy removed from project; no NLP packages installed
+
+    REM Optional utilities kept minimal
+    "%PIP_PATH%" install fuzzywuzzy python-levenshtein
     
     echo.
     echo ========================================
