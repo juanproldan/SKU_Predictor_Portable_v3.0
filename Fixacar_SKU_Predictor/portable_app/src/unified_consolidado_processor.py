@@ -57,10 +57,13 @@ def get_base_path():
         return portable_app_root
 
 BASE_PATH = get_base_path()
-DATA_DIR = os.path.join(BASE_PATH, "data")
+# Canonical client data folder: Source_Files at project root
+PROJECT_ROOT = os.path.dirname(BASE_PATH)
+DATA_DIR = os.path.join(PROJECT_ROOT, "Source_Files")
+SOURCE_FILES_DIR = DATA_DIR  # for logging
 LOGS_DIR = os.path.join(BASE_PATH, "logs")
 
-# File paths - everything in data directory for portable structure
+# File paths - everything in Source_Files for client structure
 CONSOLIDADO_PATH = os.path.join(DATA_DIR, "Consolidado.json")
 TEXT_PROCESSING_PATH = os.path.join(DATA_DIR, "Text_Processing_Rules.xlsx")
 OUTPUT_DB_PATH = os.path.join(DATA_DIR, "processed_consolidado.db")
