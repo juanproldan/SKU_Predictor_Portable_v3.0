@@ -2453,9 +2453,11 @@ class FixacarApp:
                         if year_range_predictions:
                             print(f"    ✅ Found {len(year_range_predictions)} year range predictions (original desc)")
                             for pred in year_range_predictions:
+                                # Construct DB(frequency/global) label from prediction
+                                db_label = pred.get('source') or f"DB({pred.get('frequency', 0)}/{pred.get('global_frequency', 0)})"
                                 suggestions = self._aggregate_sku_suggestions(
-                                    suggestions, pred['sku'], pred['confidence'], f"Year-Range ({pred['year_range']})")
-                                print(f"    📅 Year Range: {pred['sku']} (Freq: {pred['frequency']}, Range: {pred['year_range']}, Conf: {pred['confidence']:.3f})")
+                                    suggestions, pred['sku'], pred['confidence'], db_label)
+                                print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf: {pred['confidence']:.3f})")
 
                         # If no results with original, try with normalized description
                         if not year_range_predictions:
@@ -2470,9 +2472,10 @@ class FixacarApp:
                             if year_range_predictions:
                                 print(f"    ✅ Found {len(year_range_predictions)} year range predictions (normalized desc)")
                                 for pred in year_range_predictions:
+                                    db_label = pred.get('source') or f"DB({pred.get('frequency', 0)}/{pred.get('global_frequency', 0)})"
                                     suggestions = self._aggregate_sku_suggestions(
-                                        suggestions, pred['sku'], pred['confidence'], f"Year-Range ({pred['year_range']})")
-                                    print(f"    📅 Year Range: {pred['sku']} (Freq: {pred['frequency']}, Range: {pred['year_range']}, Conf: {pred['confidence']:.3f})")
+                                        suggestions, pred['sku'], pred['confidence'], db_label)
+                                    print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf: {pred['confidence']:.3f})")
 
                         if not year_range_predictions:
                             print(f"    ❌ No year range matches found")
@@ -2600,11 +2603,11 @@ class FixacarApp:
                         if len(nn_suggestions) < 2:  # Limit NN to 2 results
                             nn_suggestions.append((referencia, info))
                     elif 'DB' in source or 'Database' in source:
-                        if len(db_suggestions) < 2:  # Limit DB to 2 results
+                        if len(db_suggestions) < 3:  # Limit DB to 3 results
                             db_suggestions.append((referencia, info))
                     else:
                         # Handle other sources (fuzzy, etc.) - treat as DB for now
-                        if len(db_suggestions) < 2:
+                        if len(db_suggestions) < 3:
                             db_suggestions.append((referencia, info))
 
                 # Combine all limited suggestions and sort by confidence

@@ -3,12 +3,13 @@
 Promote vetted (Word, Abbr. 1) pairs from NewAbbreviations2 to Abbreviations.
 
 - Reads Text_Processing_Rules.xlsx -> NewAbbreviations2
-- For each row where Approve? == 'Y' and Abbr. 1 not empty:
+- For each row where Approve? in {Y, y, Yes, YES, yes} and Abbr. 1 not empty:
   - If Word is empty, the row is skipped (expert should fill Word)
   - Adds the abbreviation under that Word in Abbreviations (next empty Abbr.* column)
   - Deduplicates if the abbreviation already exists for that word
+- For Approve? in {N, n, No, NO, no}, move to NewAbbreviations2_Rejects (persistent do-not-suggest list)
 - Appends the promoted rows to NewAbbreviations2_History with timestamp
-- Deletes promoted rows from NewAbbreviations2
+- Deletes processed rows from NewAbbreviations2
 
 Run:
   python Fixacar_SKU_Predictor/scripts/promote_abbreviations_pairs.py
@@ -75,11 +76,16 @@ def promote():
     sh_hist = ensure_sheet(wb, 'NewAbbreviations2_History')
     sh_abbr = ensure_sheet(wb, 'Abbreviations')
 
-    # Ensure history headers
+    # Ensure history and rejects headers
     if sh_hist.max_row == 1:
         for c in range(1, sh_new.max_column + 1):
             sh_hist.cell(1, c, sh_new.cell(1, c).value)
         sh_hist.cell(1, sh_new.max_column + 1, 'Promoted_At')
+    sh_rej = ensure_sheet(wb, 'NewAbbreviations2_Rejects')
+    if sh_rej.max_row == 1:
+        sh_rej.cell(1, 1, 'Word')
+        sh_rej.cell(1, 2, 'Abbr. 1')
+        sh_rej.cell(1, 3, 'Rejected_At')
 
     # Existing pairs
     existing = collect_existing(sh_abbr)
@@ -93,21 +99,38 @@ def promote():
         raise SystemExit("NewAbbreviations2 sheet is missing 'Approve?' column.")
 
     promoted_rows: List[int] = []
+    rejected_rows: List[int] = []
 
     for r in range(2, sh_new.max_row + 1):
         approve = (sh_new.cell(r, col_approve).value or '').strip().lower()
-        if approve != 'y':
-            continue
         word = (sh_new.cell(r, col_word).value or '').strip().lower()
         abbr = (sh_new.cell(r, col_abbr).value or '').strip().lower()
-        if not abbr or not word:
-            continue
-        if abbr in existing.get(word, set()):
+
+        if approve in {'y', 'yes'}:
+            if not abbr or not word:
+                continue
+            if abbr in existing.get(word, set()):
+                promoted_rows.append(r)
+                continue
+            append_abbr(sh_abbr, word, abbr)
+            existing.setdefault(word, set()).add(abbr)
             promoted_rows.append(r)
+        elif approve in {'n', 'no'}:
+            # Add to rejects if not already there
+            already = False
+            for rr in range(2, sh_rej.max_row + 1):
+                if (sh_rej.cell(rr, 1).value or '').strip().lower() == word and (sh_rej.cell(rr, 2).value or '').strip().lower() == abbr:
+                    already = True
+                    break
+            if not already:
+                dr = sh_rej.max_row + 1
+                sh_rej.cell(dr, 1, word)
+                sh_rej.cell(dr, 2, abbr)
+                sh_rej.cell(dr, 3, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            rejected_rows.append(r)
+        else:
+            # Skip undecided rows
             continue
-        append_abbr(sh_abbr, word, abbr)
-        existing.setdefault(word, set()).add(abbr)
-        promoted_rows.append(r)
 
     # Archive and delete
     if promoted_rows:
@@ -117,11 +140,12 @@ def promote():
             for c in range(1, sh_new.max_column + 1):
                 sh_hist.cell(dest_row, c, sh_new.cell(r, c).value)
             sh_hist.cell(dest_row, sh_new.max_column + 1, timestamp)
-        for r in sorted(promoted_rows, reverse=True):
-            sh_new.delete_rows(r, 1)
+    # Delete both promoted and rejected rows from NewAbbreviations2
+    for r in sorted(set(promoted_rows + rejected_rows), reverse=True):
+        sh_new.delete_rows(r, 1)
 
     wb.save(XLSX)
-    print(f"Promotion complete. Promoted rows: {len(promoted_rows)}")
+    print(f"Promotion complete. Promoted rows: {len(promoted_rows)}, Rejected rows: {len(rejected_rows)}")
 
 
 if __name__ == '__main__':

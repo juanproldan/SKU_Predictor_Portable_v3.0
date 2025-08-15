@@ -83,7 +83,7 @@ class YearRangeDatabaseOptimizer:
         # Try exact description match first (highest confidence)
         try:
             cursor.execute("""
-                SELECT referencia, frequency, start_year, end_year
+                SELECT referencia, frequency, start_year, end_year, global_sku_frequency
                 FROM sku_year_ranges
                 WHERE LOWER(maker) = LOWER(?)
                 AND LOWER(series) = LOWER(?)
@@ -97,20 +97,21 @@ class YearRangeDatabaseOptimizer:
             exact_results = cursor.fetchall()
             
             for row in exact_results:
-                referencia, frequency, start_year, end_year = row
-                
+                referencia, frequency, start_year, end_year, global_freq = row
+
                 # Calculate confidence based on frequency and year range coverage
                 confidence = self._calculate_year_range_confidence(frequency, start_year, end_year, target_year, "exact")
-                
+
                 predictions.append({
                     'sku': referencia,
                     'frequency': frequency,
+                    'global_frequency': global_freq,
                     'confidence': confidence,
-                    'source': 'Year-Range-Exact',
+                    'source': f"DB({frequency}/{global_freq})",
                     'year_range': f"{start_year}-{end_year}"
                 })
-                
-                self.logger.debug(f"Year range exact match: {referencia} (freq: {frequency}, range: {start_year}-{end_year})")
+
+                self.logger.debug(f"Year range exact match: {referencia} (freq: {frequency}, global: {global_freq}, range: {start_year}-{end_year})")
         
         except Exception as e:
             self.logger.error(f"Error in exact year range query: {e}")
@@ -119,7 +120,7 @@ class YearRangeDatabaseOptimizer:
         if not predictions:
             try:
                 cursor.execute("""
-                    SELECT referencia, frequency, start_year, end_year
+                    SELECT referencia, frequency, start_year, end_year, global_sku_frequency
                     FROM sku_year_ranges
                     WHERE LOWER(maker) = LOWER(?)
                     AND LOWER(series) = LOWER(?)
@@ -133,20 +134,21 @@ class YearRangeDatabaseOptimizer:
                 fuzzy_results = cursor.fetchall()
                 
                 for row in fuzzy_results:
-                    referencia, frequency, start_year, end_year = row
-                    
+                    referencia, frequency, start_year, end_year, global_freq = row
+
                     # Lower confidence for fuzzy matches
                     confidence = self._calculate_year_range_confidence(frequency, start_year, end_year, target_year, "fuzzy")
-                    
+
                     predictions.append({
                         'sku': referencia,
                         'frequency': frequency,
+                        'global_frequency': global_freq,
                         'confidence': confidence,
-                        'source': 'Year-Range-Fuzzy',
+                        'source': f"DB({frequency}/{global_freq})",
                         'year_range': f"{start_year}-{end_year}"
                     })
-                    
-                    self.logger.debug(f"Year range fuzzy match: {referencia} (freq: {frequency}, range: {start_year}-{end_year})")
+
+                    self.logger.debug(f"Year range fuzzy match: {referencia} (freq: {frequency}, global: {global_freq}, range: {start_year}-{end_year})")
             
             except Exception as e:
                 self.logger.error(f"Error in fuzzy year range query: {e}")
