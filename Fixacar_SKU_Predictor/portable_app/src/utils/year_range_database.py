@@ -83,7 +83,7 @@ class YearRangeDatabaseOptimizer:
         # Try exact description match first (highest confidence)
         try:
             cursor.execute("""
-                SELECT referencia, frequency, start_year, end_year
+                SELECT referencia, frequency, start_year, end_year, global_sku_frequency
                 FROM sku_year_ranges
                 WHERE LOWER(maker) = LOWER(?)
                 AND LOWER(series) = LOWER(?)
@@ -97,60 +97,62 @@ class YearRangeDatabaseOptimizer:
             exact_results = cursor.fetchall()
             
             for row in exact_results:
-                referencia, frequency, start_year, end_year = row
-                
+                referencia, frequency, start_year, end_year, global_freq = row
+
                 # Calculate confidence based on frequency and year range coverage
                 confidence = self._calculate_year_range_confidence(frequency, start_year, end_year, target_year, "exact")
-                
+
                 predictions.append({
                     'sku': referencia,
                     'frequency': frequency,
+                    'global_frequency': global_freq,
                     'confidence': confidence,
-                    'source': 'Year-Range-Exact',
+                    'source': f"DB({frequency}/{global_freq})",
                     'year_range': f"{start_year}-{end_year}"
                 })
-                
-                self.logger.debug(f"Year range exact match: {referencia} (freq: {frequency}, range: {start_year}-{end_year})")
+
+                self.logger.debug(f"Year range exact match: {referencia} (freq: {frequency}, global: {global_freq}, range: {start_year}-{end_year})")
         
         except Exception as e:
             self.logger.error(f"Error in exact year range query: {e}")
         
-        # If no exact matches, try fuzzy description matching
+        # Description fuzzy matching is DISABLED per policy (parity with Step 2). Only exact description is allowed.
+
+        # If still no matches, try series LIKE fallback (handles variants like 'sail (cs3)/ls')
         if not predictions:
             try:
+                # Build relaxed series patterns (allowed fuzzy ONLY on series)
+                short_series = series.split('/')[-1].split('(')[0].strip() if series else ''
+                pattern1 = f"%{series}%" if series else '%'
+                pattern2 = f"%{short_series}%" if short_series else '%'
                 cursor.execute("""
-                    SELECT referencia, frequency, start_year, end_year
+                    SELECT referencia, frequency, start_year, end_year, global_sku_frequency
                     FROM sku_year_ranges
                     WHERE LOWER(maker) = LOWER(?)
-                    AND LOWER(series) = LOWER(?)
-                    AND (LOWER(descripcion) LIKE LOWER(?) OR LOWER(normalized_descripcion) LIKE LOWER(?))
+                    AND (LOWER(series) LIKE LOWER(?) OR LOWER(series) LIKE LOWER(?))
+                    AND (LOWER(descripcion) = LOWER(?) OR LOWER(normalized_descripcion) = LOWER(?))
                     AND ? BETWEEN start_year AND end_year
                     AND referencia IS NOT NULL AND LENGTH(TRIM(referencia)) > 0
                     ORDER BY frequency DESC
                     LIMIT ?
-                """, (maker, series, f"%{description}%", f"%{description}%", model, limit))
-                
-                fuzzy_results = cursor.fetchall()
-                
-                for row in fuzzy_results:
-                    referencia, frequency, start_year, end_year = row
-                    
-                    # Lower confidence for fuzzy matches
-                    confidence = self._calculate_year_range_confidence(frequency, start_year, end_year, target_year, "fuzzy")
-                    
+                """, (maker, pattern1, pattern2, description, description, model, limit))
+                like_results = cursor.fetchall()
+                for row in like_results:
+                    referencia, frequency, start_year, end_year, global_freq = row
+                    confidence = self._calculate_year_range_confidence(frequency, start_year, end_year, target_year, "exact")
                     predictions.append({
                         'sku': referencia,
                         'frequency': frequency,
+                        'global_frequency': global_freq,
                         'confidence': confidence,
-                        'source': 'Year-Range-Fuzzy',
+                        'source': f"DB({frequency}/{global_freq})",
                         'year_range': f"{start_year}-{end_year}"
                     })
-                    
-                    self.logger.debug(f"Year range fuzzy match: {referencia} (freq: {frequency}, range: {start_year}-{end_year})")
-            
+                if like_results:
+                    self.logger.debug(f"Series LIKE fallback returned {len(like_results)} rows for maker={maker}, series~={series}, year={model}")
             except Exception as e:
-                self.logger.error(f"Error in fuzzy year range query: {e}")
-        
+                self.logger.error(f"Error in series LIKE fallback: {e}")
+
         return predictions
     
 

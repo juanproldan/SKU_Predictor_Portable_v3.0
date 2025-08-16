@@ -261,12 +261,12 @@ def normalize_text(text: str, use_fuzzy: bool = False, expand_linguistic_variati
     - Standardizes internal whitespace (multiple spaces to one).
     - Removes common punctuation (keeps alphanumeric and spaces).
     - Handles accented characters/diacritics (e.g., converts 'á' to 'a').
-    - Optionally expands abbreviations, gender, and plural variations.
+    - Optionally expands abbreviations and gender (NO plural/singular changes).
 
     Args:
         text: The input text to normalize
         use_fuzzy: Whether to use enhanced fuzzy normalization (default: False)
-        expand_linguistic_variations: Whether to expand abbreviations, gender, plurals (default: True)
+        expand_linguistic_variations: Whether to expand abbreviations and gender (default: True)
 
     Returns:
         Normalized text string
@@ -304,7 +304,7 @@ def normalize_text(text: str, use_fuzzy: bool = False, expand_linguistic_variati
     # strip again in case regex leaves leading/trailing space
     text = re.sub(r'\s+', ' ', text).strip()
 
-    # 7. Expand linguistic variations (abbreviations, gender, plurals) if requested
+    # 7. Expand linguistic variations (abbreviations and gender only) if requested
     if expand_linguistic_variations:
         text = expand_linguistic_variations_text(text)
 
@@ -420,7 +420,7 @@ def expand_linguistic_variations_text(text: str) -> str:
     - Context-aware abbreviations: handles 'd' and 't' based on part type
     - Gender-aware abbreviations: izq -> izquierdo/izquierda based on noun gender
     - Standard abbreviations with proper gender agreement
-    - Plural variations: farolas -> farola (normalize to singular, except specific cases)
+    - NOTE: No plural→singular normalization here.
 
     This is independent of industry synonyms and handles basic Spanish linguistic patterns.
     """
@@ -798,19 +798,13 @@ def expand_context_dependent_abbreviation(abbrev: str, context_word: str) -> str
 def expand_single_word_linguistic(word: str) -> str:
     """
     Expands a single word for linguistic variations.
-    Note: This function handles abbreviations and plurals, but NOT gender normalization.
-    Gender variations are handled during similarity matching, not normalization.
-
-    For context-dependent abbreviations, this function only handles clear cases.
-    Ambiguous single letters are handled by expand_linguistic_variations_text()
-    which has access to the full text context.
+    Note: Abbreviations only; NO plural/singular normalization here.
+    Gender variations are handled by context-aware functions.
     """
     if not word:
         return word
 
     # 1. Abbreviation expansion (directional terms) - CLEAR CASES ONLY
-    # Note: Gender-dependent abbreviations (i, iz, izq, der, etc.) are handled
-    # by expand_gender_dependent_abbreviation() in the main text processing
     abbreviation_map = {
         # FRONT variations (gender-neutral or context will determine)
         'del': 'delantero',  # Default to masculine, context may override
@@ -839,21 +833,7 @@ def expand_single_word_linguistic(word: str) -> str:
     if word in abbreviation_map:
         return abbreviation_map[word]
 
-    # 2. Plural normalization (context-independent)
-    plural_map = {
-        'farolas': 'farola',
-        'luces': 'luz',
-        'espejos': 'espejo',
-        'puertas': 'puerta',
-        'paragolpe': 'paragolpes',  # This one goes to plural (standard form)
-        'guardafangos': 'guardafango',
-        'guardabarros': 'guardabarro',
-    }
-
-    if word in plural_map:
-        return plural_map[word]
-
-    # No expansion needed - ambiguous cases handled at text level
+    # No plural map anymore
     return word
 
 

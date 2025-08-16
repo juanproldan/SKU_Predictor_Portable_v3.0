@@ -6,7 +6,8 @@ pushd "%~dp0"
 
 set "LOGSDIR=logs"
 if not exist "%LOGSDIR%" mkdir "%LOGSDIR%"
-set "LOGFILE=%LOGSDIR%\02_unified_consolidado_processor.log"
+set "LOG_PROCESS=%LOGSDIR%\02_unified_consolidado_processor.log"
+set "LOG_ABBR=%LOGSDIR%\02_new_abbreviations_pairs.log"
 
 
 echo ========================================
@@ -23,9 +24,10 @@ if errorlevel 1 (
   exit /b 1
 )
 
-py -3.11 portable_app\src\unified_consolidado_processor.py %* > "%LOGFILE%" 2>&1
+REM Run the unified consolidado processor
+py -3.11 portable_app\src\unified_consolidado_processor.py %* > "%LOG_PROCESS%" 2>&1
 set "ERR=%ERRORLEVEL%"
-type "%LOGFILE%"
+type "%LOG_PROCESS%"
 if not "%ERR%"=="0" (
   echo [ERROR] Processing failed. See log above.
   pause
@@ -33,7 +35,22 @@ if not "%ERR%"=="0" (
   exit /b %ERR%
 )
 
-echo [OK] Processing complete.
+echo.
+echo ========================================
+echo POST-PROCESS: Generate NewAbbreviations2 suggestions
+
+echo Running generator: scripts\generate_new_abbreviations_pairs.py
+py -3.11 scripts\generate_new_abbreviations_pairs.py > "%LOG_ABBR%" 2>&1
+set "ERR_ABBR=%ERRORLEVEL%"
+type "%LOG_ABBR%"
+if not "%ERR_ABBR%"=="0" (
+  echo [ERROR] NewAbbreviations2 generation failed. See log above.
+  pause
+  popd
+  exit /b %ERR_ABBR%
+)
+
+echo [OK] Processing complete and NewAbbreviations2 regenerated.
 pause
 popd
 exit /b 0

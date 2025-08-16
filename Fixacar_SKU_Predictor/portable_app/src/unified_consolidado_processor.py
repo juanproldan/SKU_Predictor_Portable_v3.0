@@ -31,13 +31,12 @@ from pathlib import Path
 import logging
 from datetime import datetime
 
-# Add utils to path for text processing
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-try:
-    from utils.text_utils import normalize_text
-except ImportError:
-    # Fallback for when running from root directory
-    from src.utils.text_utils import normalize_text
+# Add utils to path for text processing (ensure 'src' is importable)
+SRC_DIR = os.path.dirname(__file__)
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+# Use the single shared text processor; no legacy/text_utils fallbacks
+from utils.unified_text import unified_text_preprocessing
 
 # Global variables for text processing maps
 user_corrections_map_global = {}
@@ -271,6 +270,8 @@ def load_equivalencias_map(text_processing_path):
 
     try:
         wb = openpyxl.load_workbook(text_processing_path, data_only=True)
+        if 'Equivalencias' not in wb.sheetnames:
+            raise FileNotFoundError("Missing 'Equivalencias' sheet in Text_Processing_Rules.xlsx")
         sh = wb['Equivalencias']
         headers = [c.value for c in next(sh.iter_rows(min_row=1, max_row=1))]
         col_idx = {h: i for i, h in enumerate(headers)}
@@ -285,7 +286,7 @@ def load_equivalencias_map(text_processing_path):
 
     except Exception as e:
         logger.error(f"Error loading equivalencias map: {e}")
-        return {}
+        raise
 
 def load_user_corrections_map(text_processing_path):
     """
@@ -332,6 +333,8 @@ def load_abbreviations_map(text_processing_path):
 
     try:
         wb = openpyxl.load_workbook(text_processing_path, data_only=True)
+        if 'Abbreviations' not in wb.sheetnames:
+            raise FileNotFoundError("Missing 'Abbreviations' sheet in Text_Processing_Rules.xlsx")
         sh = wb['Abbreviations']
         # Read arbitrary-width rows: first cell canonical, rest abbreviations
         abbreviations_map = {}
@@ -346,7 +349,7 @@ def load_abbreviations_map(text_processing_path):
 
     except Exception as e:
         logger.error(f"Error loading abbreviations map: {e}")
-        return {}
+        raise
 
 def load_series_normalization_map(text_processing_path):
     """
@@ -419,8 +422,8 @@ def load_series_normalization_map(text_processing_path):
         return series_map
 
     except Exception as e:
-        logger.warning(f"Could not load series normalization (Series tab may not exist): {e}")
-        return {}
+        logger.error(f"Could not load series normalization (Series tab may not exist): {e}")
+        raise
 
 def normalize_series_preprocessing(maker, series, series_map):
     """
@@ -553,53 +556,8 @@ def expand_synonyms(text: str) -> str:
 
     return ' '.join(expanded_words)
 
-# spaCy fully removed: keep a simple alias to normalize_text for backward references
-
-def enhanced_normalize_text(text: str, **kwargs) -> str:
-    return normalize_text(text, **kwargs)
-
-def unified_text_preprocessing(text: str) -> str:
-    """
-    Unified Text Preprocessing Pipeline for ALL text comparisons in the SKU prediction system.
-
-    This ensures that BOTH input descriptions AND target comparison texts (from Database/Maestro)
-    receive identical preprocessing, eliminating false penalties for linguistically equivalent terms.
-
-    Pipeline (Priority Order):
-    1. User Corrections: Apply learned corrections from user feedback (HIGHEST PRIORITY)
-    2. Abbreviations: Expand automotive abbreviations (PUER → PUERTA)
-    3. Synonym Expansion: Apply Equivalencias.xlsx industry synonyms
-    4. Linguistic Normalization: Handle gender agreement, plurals/singulars
-    5. Text Normalization: Convert to lowercase, remove extra spaces, standardize punctuation
-
-    Example:
-    - Input: "VIDRIO PUER.DL.D."
-    - Step 1: Check user corrections (if user taught: "VIDRIO PUER.DL.D." → "CRISTAL PUERTA DELANTERA DERECHA")
-    - Step 2: Apply abbreviations: "PUER" → "PUERTA", "DL" → "DELANTERA", "D" → "DERECHA"
-    - Step 3: Apply synonyms: "VIDRIO" → "GROUP_1001" (if in equivalencias)
-    - Result: Consistent, learned text processing
-    """
-    if not text or not text.strip():
-        return ""
-
-    # Step 1: Apply user corrections FIRST (highest priority - learned from user feedback)
-    corrected_text = apply_user_corrections(text)
-
-    # Step 2: Apply abbreviations expansion
-    abbreviated_text = apply_abbreviations(corrected_text)
-
-    # Step 3: Apply synonym expansion (industry-specific terms from Equivalencias.xlsx)
-    expanded_text = expand_synonyms(abbreviated_text)
-
-    # Step 4: Apply comprehensive linguistic normalization
-    # This handles gender agreement, plurals/singulars
-    normalized_text = enhanced_normalize_text(expanded_text, expand_linguistic_variations=True)
-
-    # Step 5: Final text normalization (lowercase, spaces, punctuation)
-    final_text = normalized_text.lower().strip()
-
-    logging.getLogger(__name__).debug(f"Unified preprocessing: '{text}' → '{final_text}'")
-    return final_text
+# Replace local pipeline with import of the canonical processor to guarantee parity
+from utils.unified_text import unified_text_preprocessing  # noqa: F401
 
 # --- Year Range Aggregation Functions ---
 def detect_year_ranges(years):
@@ -843,13 +801,10 @@ def process_consolidado_record(record, series_map=None):
     normalized_descripcion = None
 
     if description:
-        try:
-            normalized_descripcion = unified_text_preprocessing(description)
-            if normalized_descripcion:
-                normalized_descripcion = str(normalized_descripcion).lower()
-        except Exception as e:
-            logging.getLogger(__name__).warning(f"Error processing description '{description}': {e}")
-            normalized_descripcion = description  # Use lowercase original if processing fails
+        # Any failure to normalize should be surfaced and stop the pipeline
+        normalized_descripcion = unified_text_preprocessing(description)
+        if normalized_descripcion:
+            normalized_descripcion = str(normalized_descripcion).lower()
 
     return {
         'vin_number': cleaned_vin,
@@ -1072,47 +1027,38 @@ def main(verbose: bool = False):
         logger.info(f"Text processing rules: {TEXT_PROCESSING_PATH}")
         logger.info(f"Database output: {OUTPUT_DB_PATH}")
 
-    # Check if input file exists
+    # Check required inputs exist
     if not os.path.exists(CONSOLIDADO_PATH):
         logger.error(f"Consolidado.json not found at {CONSOLIDADO_PATH}")
         logger.error("Please ensure Consolidado.json is in the Source_Files directory")
         return False
+    if not os.path.exists(TEXT_PROCESSING_PATH):
+        logger.error(f"Text_Processing_Rules.xlsx not found at {TEXT_PROCESSING_PATH}")
+        return False
 
-    # Load text processing rules
+    # Load text processing rules (hard-fail on problems)
     logger.info("Loading text processing rules...")
     equivalencias_map = load_equivalencias_map(TEXT_PROCESSING_PATH)
 
-    # Load series normalization rules (hybrid approach - Phase 1)
+    # Load series normalization rules (hard-fail on problems)
     logger.info("Loading series normalization rules...")
     series_map = load_series_normalization_map(TEXT_PROCESSING_PATH)
 
-    # Load unified text processing maps (NEW - for complete consistency)
+    # Load unified text processing maps (hard-fail on problems)
     logger.info("Loading unified text processing maps...")
     global user_corrections_map_global, abbreviations_map_global, synonym_expansion_map_global
 
-    try:
-        user_corrections_map_global = load_user_corrections_map(TEXT_PROCESSING_PATH)
-        logger.info(f"Loaded {len(user_corrections_map_global)} user corrections")
-    except Exception as e:
-        logger.warning(f"Could not load user corrections: {e}")
-        user_corrections_map_global = {}
+    user_corrections_map_global = load_user_corrections_map(TEXT_PROCESSING_PATH)
+    logger.info(f"Loaded {len(user_corrections_map_global)} user corrections")
 
-    try:
-        abbreviations_map_global = load_abbreviations_map(TEXT_PROCESSING_PATH)
-        logger.info(f"Loaded {len(abbreviations_map_global)} abbreviations")
-    except Exception as e:
-        logger.warning(f"Could not load abbreviations: {e}")
-        abbreviations_map_global = {}
+    abbreviations_map_global = load_abbreviations_map(TEXT_PROCESSING_PATH)
+    logger.info(f"Loaded {len(abbreviations_map_global)} abbreviations")
 
-    try:
-        # Convert equivalencias_map to synonym format for expand_synonyms function
-        synonym_expansion_map_global = {}
-        for word, group_id in equivalencias_map.items():
-            synonym_expansion_map_global[word.lower()] = group_id
-        logger.info(f"Loaded {len(synonym_expansion_map_global)} synonyms from equivalencias")
-    except Exception as e:
-        logger.warning(f"Could not process synonyms: {e}")
-        synonym_expansion_map_global = {}
+    # Convert equivalencias_map to synonym format for expand_synonyms function
+    synonym_expansion_map_global = {}
+    for word, group_id in equivalencias_map.items():
+        synonym_expansion_map_global[word.lower()] = group_id
+    logger.info(f"Loaded {len(synonym_expansion_map_global)} synonyms from equivalencias")
 
     # spaCy fully removed – no initialization
 
