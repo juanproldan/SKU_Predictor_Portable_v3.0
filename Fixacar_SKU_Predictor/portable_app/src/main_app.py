@@ -60,13 +60,7 @@ def _notna(val) -> bool:
 # Performance improvements disabled per client preference (clean logs, minimal deps)
 PERFORMANCE_IMPROVEMENTS_AVAILABLE = False
 
-# Always-available optimized helpers (not part of perf bundle)
-from utils.optimized_startup import (
-    get_data_loader, get_model_loader,
-    get_text_processor, initialize_optimizations
-)
-from utils.optimized_database import get_optimized_database
-from utils.year_range_database import YearRangeDatabaseOptimizer
+# Core utils will be imported after setup_imports() adjusts sys.path
 
 # get_base_path is optional module; provide fallback when missing
 try:
@@ -111,110 +105,12 @@ def setup_imports():
 
 # Setup imports
 setup_imports()
-
-# Global variables for imports (will be set in try/except blocks)
-load_model = None
-predict_sku = None
-normalize_text = None
-DummyTokenizer = None
-extract_vin_features_production = None
 decode_year = None
 
-# Now import the modules with multiple fallback strategies (SKU-NN optional, not required)
-try:
-    from utils.text_utils import normalize_text
-    from utils.dummy_tokenizer import DummyTokenizer
-    from train_vin_predictor import extract_vin_features_production, decode_year
-    print("✅ Successfully imported core modules (strategy 1)")
-except ImportError as e:
-    print(f"Import error (strategy 1): {e}")
-    try:
-        # Strategy 2: Try importing from current directory
-        import sys
-        import os
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        sys.path.insert(0, current_dir)
-
-        from utils.text_utils import normalize_text
-        from utils.dummy_tokenizer import DummyTokenizer
-        from train_vin_predictor import extract_vin_features_production, decode_year
-        print("✅ Successfully imported core modules (strategy 2)")
-    except ImportError as e2:
-        print(f"Import error (strategy 2): {e2}")
-        try:
-            # Strategy 3: Try absolute imports (no SKU-NN)
-            import utils.text_utils as text_utils
-            import utils.dummy_tokenizer as dummy_tokenizer
-            import train_vin_predictor as vin_predictor
-
-            normalize_text = text_utils.normalize_text
-            DummyTokenizer = dummy_tokenizer.DummyTokenizer
-            extract_vin_features_production = vin_predictor.extract_vin_features_production
-            decode_year = vin_predictor.decode_year
-            print("✅ Successfully imported core modules (strategy 3)")
-        except ImportError as e3:
-            print(f"Import error (strategy 3): {e3}")
-            # Strategy 4: Import individual files directly
-            try:
-                import sys
-                import os
-
-                # Get the directory where the executable is located
-                if getattr(sys, 'frozen', False):
-                    base_dir = os.path.dirname(sys.executable)
-                else:
-                    base_dir = os.path.dirname(os.path.abspath(__file__))
-
-                # Add all possible paths
-                possible_paths = [
-                    base_dir,
-                    os.path.join(base_dir, 'models'),
-                    os.path.join(base_dir, 'utils'),
-                    os.path.join(base_dir, '..', 'src'),
-                    os.path.join(base_dir, '..', 'src', 'models'),
-                    os.path.join(base_dir, '..', 'src', 'utils')
-                ]
-
-                for path in possible_paths:
-                    if os.path.exists(path) and path not in sys.path:
-                        sys.path.insert(0, path)
-
-                # Try importing again (no SKU-NN)
-                import text_utils
-                import dummy_tokenizer
-                import train_vin_predictor
-
-                normalize_text = text_utils.normalize_text
-                DummyTokenizer = dummy_tokenizer.DummyTokenizer
-                extract_vin_features_production = train_vin_predictor.extract_vin_features_production
-                decode_year = train_vin_predictor.decode_year
-                print("✅ Successfully imported core modules (strategy 4)")
-            except ImportError as e4:
-                print(f"❌ All import strategies failed. Final error: {e4}")
-                print("⚠️ SKU prediction will not work without these modules")
-                # Set dummy functions to prevent crashes
-                def dummy_load_model(*args, **kwargs):
-                    print("❌ load_model not available - imports failed")
-                    return None
-                def dummy_predict_sku(*args, **kwargs):
-                    print("❌ predict_sku not available - imports failed")
-                    return "UNKNOWN", 0.0
-                def dummy_normalize_text(text, **kwargs):
-                    return text.lower() if text else ""
-                class DummyTokenizerClass:
-                    def __init__(self, *args, **kwargs): pass
-                    def transform(self, texts): return [[0] * 30 for _ in texts]
-                def dummy_extract_vin(*args, **kwargs):
-                    return [0] * 17
-                def dummy_decode_year(*args, **kwargs):
-                    return 2020
-
-                load_model = dummy_load_model
-                predict_sku = dummy_predict_sku
-                normalize_text = dummy_normalize_text
-                DummyTokenizer = DummyTokenizerClass
-                extract_vin_features_production = dummy_extract_vin
-                decode_year = dummy_decode_year
+# Strict imports (no fallbacks). Fail fast if required modules are missing.
+from utils.unified_text import unified_text_preprocessing as preprocess_text
+# Use inference-only VIN utilities to avoid importing training stacks into the GUI
+from utils.vin_inference import extract_vin_features_production, decode_year
 
 import sys
 
@@ -275,7 +171,8 @@ def get_resource_path(relative_path):
 
 # --- Configuration (using Source_Files as canonical) ---
 DEFAULT_TEXT_PROCESSING_PATH = os.path.normpath(os.path.join(PROJECT_ROOT, "..", "Source_Files", "Text_Processing_Rules.xlsx"))
-DEFAULT_MAESTRO_PATH = os.path.normpath(os.path.join(PROJECT_ROOT, "..", "Source_Files", "Maestro.xlsx"))
+# Maestro is now a sheet inside Text_Processing_Rules.xlsx
+DEFAULT_MAESTRO_SHEET = "Maestro"
 DEFAULT_DB_PATH = os.path.normpath(os.path.join(PROJECT_ROOT, "..", "Source_Files", "processed_consolidado.db"))
 MODEL_DIR = os.path.normpath(os.path.join(PROJECT_ROOT, "..", "models"))
 # SKU NN not used in client build; directory omitted
@@ -345,6 +242,9 @@ class FixacarApp:
             print("🚀 Initializing startup optimizations...")
 
             # Initialize global optimizations (spaCy disabled)
+            from utils.optimized_startup import initialize_optimizations
+            from utils.optimized_database import get_optimized_database
+            from utils.year_range_database import YearRangeDatabaseOptimizer
             initialize_optimizations()
 
             # Initialize optimized database
@@ -389,8 +289,8 @@ class FixacarApp:
         print("--- Loading Application Data & Models ---")
         # Load rules and Maestro
         self.load_text_processing_rules(DEFAULT_TEXT_PROCESSING_PATH)
-        maestro_data_global = self.load_maestro_data(
-            DEFAULT_MAESTRO_PATH, equivalencias_map_global)
+        maestro_data_global = self.load_maestro_data_from_rules(
+            DEFAULT_TEXT_PROCESSING_PATH, DEFAULT_MAESTRO_SHEET, equivalencias_map_global)
 
         # Load lightweight VIN lookup model
         print("Loading VIN lookup model (nearest-key mode)...")
@@ -419,11 +319,9 @@ class FixacarApp:
         self.smart_processor = None
         return
 
+    # Deprecated: do not use; kept to preserve call sites (none expected). Use self.unified_text_preprocessing instead.
     def enhanced_normalize_text(self, text: str, **kwargs) -> str:
-        """
-        Enhanced text normalization (spaCy fully removed). Use standard normalize_text.
-        """
-        return normalize_text(text, **kwargs)
+        return self.unified_text_preprocessing(text)
 
     def expand_synonyms(self, text: str) -> str:
         """
@@ -431,8 +329,8 @@ class FixacarApp:
         industry-specific synonyms with their equivalence group representatives before any prediction method.
 
         This function ONLY handles Equivalencias.xlsx synonyms (industry-specific terms).
-        Linguistic variations (abbreviations, gender, plurals) are handled automatically
-        by the normalize_text function.
+        Linguistic variations (abbreviations and gender) are handled automatically
+        by the normalize_text function. No plural/singular changes are applied.
 
         This ensures ALL prediction sources (Maestro, Database, Neural Network)
         receive the same normalized input after synonym expansion.
@@ -440,7 +338,7 @@ class FixacarApp:
         if not text or not synonym_expansion_map_global:
             return text
 
-        # First normalize text (this handles abbreviations, gender, plurals automatically)
+        # First normalize text (abbreviations + gender; NO plural/singular)
         # Use the same unified preprocessing as Step 2 to ensure parity
         normalized_text = self.unified_text_preprocessing(text)
         words = normalized_text.split()
@@ -677,41 +575,14 @@ class FixacarApp:
                 return "Unknown"
 
         except Exception as e:
-            print(f"    ❌ Error in fallback series lookup: {e}")
-            return "Unknown"
+            raise
 
     def unified_text_preprocessing(self, text: str) -> str:
-        """Delegate to the single, shared text processor used by both Step 2 and Step 5.
-        Always prefer this over enhanced_normalize_text to ensure parity with DB build.
-        """
-        try:
-            from utils.unified_text import unified_text_preprocessing as _unified
-            return _unified(text)
-        except Exception:
-            # As a last resort, lowercase/strip; but aim to keep unified_text available
-            return (text or "").lower().strip()
+        """Use the single, shared text processor. Hard-fail if unavailable."""
+        return preprocess_text(text)
 
     def apply_user_corrections(self, text: str) -> str:
-        """
-        Apply user corrections from the User_Corrections tab.
-        This has the HIGHEST priority in text processing.
-        Applies both phrase-level and intelligent word-level corrections.
-        """
-        if not text or not user_corrections_map_global:
-            return text
-
-        # Step 1: Check for exact phrase match first (highest priority)
-        if text in user_corrections_map_global:
-            corrected = user_corrections_map_global[text]
-            print(f"    ✅ Phrase correction applied: '{text}' → '{corrected}'")
-            return corrected
-
-        # Step 2: Apply word-level corrections with context awareness
-        corrected_text = self._apply_word_level_corrections(text)
-        if corrected_text != text:
-            print(f"    ✨ Word-level corrections applied: '{text}' → '{corrected_text}'")
-            return corrected_text
-
+        """Deprecated: User_Corrections are no longer used."""
         return text
 
     def _apply_word_level_corrections(self, text: str) -> str:
@@ -844,73 +715,8 @@ class FixacarApp:
         return ' '.join(expanded_words)
 
     def save_user_correction(self, original_text: str, corrected_text: str):
-        """
-        Save a user correction with both phrase-level and intelligent word-level learning.
-        This enables context-aware learning that understands gender agreement rules.
-        """
-        global user_corrections_map_global
-
-        # Update in-memory map for phrase-level corrections
-        user_corrections_map_global[original_text] = corrected_text
-
-        # Analyze the correction for word-level learning
-        word_level_corrections = self._analyze_correction_for_word_learning(original_text, corrected_text)
-
-        # Update Excel file (openpyxl only)
-        try:
-            file_path = DEFAULT_TEXT_PROCESSING_PATH
-            wb = openpyxl.load_workbook(file_path)
-            if 'User_Corrections' not in wb.sheetnames:
-                wb.create_sheet('User_Corrections')
-            sh = wb['User_Corrections']
-
-            # Ensure headers
-            headers = ['Original_Text','Corrected_Text','Date_Added','Usage_Count','Last_Used','Notes']
-            if sh.max_row == 0:
-                sh.append(headers)
-
-            # Build in-memory index of Original_Text -> row number
-            header_row = [c.value for c in next(sh.iter_rows(min_row=1, max_row=1))]
-            col_idx = {h: i for i, h in enumerate(header_row)}
-
-            # Find existing row by Original_Text
-            found_row = None
-            for r in sh.iter_rows(min_row=2):
-                if (r[col_idx.get('Original_Text',0)].value or '') == original_text:
-                    found_row = r
-                    break
-
-            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            if found_row:
-                # Update existing
-                found_row[col_idx.get('Corrected_Text',1)].value = corrected_text
-                found_row[col_idx.get('Last_Used',4)].value = now_str
-                # Increment Usage_Count
-                uc_cell = found_row[col_idx.get('Usage_Count',3)]
-                try:
-                    uc = int(uc_cell.value or 0) + 1
-                except Exception:
-                    uc = 1
-                uc_cell.value = uc
-                print(f"    📚 Updated existing phrase correction: '{original_text}' → '{corrected_text}'")
-            else:
-                # Append new row
-                sh.append([original_text, corrected_text, now_str, 1, now_str, 'User phrase correction'])
-                print(f"    📚 Added new phrase correction: '{original_text}' → '{corrected_text}'")
-
-            # Save word-level corrections as separate patterns
-            for word_correction in word_level_corrections:
-                # Add to Excel as rows with 'WORD: x -> y' in Original_Text
-                pattern = f"WORD: {word_correction['original_word']} → {word_correction['corrected_word']}"
-                notes = word_correction['context']['type'] if word_correction['context']['type'] != 'unknown' else ''
-                sh.append([pattern, word_correction['corrected_word'], now_str, 1, now_str, notes])
-                # And update in-memory map
-                user_corrections_map_global[pattern] = word_correction['corrected_word']
-
-            wb.save(file_path)
-        except Exception as e:
-            print(f"    ⚠️ Error saving user correction: {e}")
+        """Deprecated: User_Corrections are no longer used."""
+        return
 
     def _analyze_correction_for_word_learning(self, original_text: str, corrected_text: str) -> list:
         """
@@ -1528,28 +1334,20 @@ class FixacarApp:
                 f"Error loading or processing Equivalencias.xlsx: {e}. Equivalency linking will be disabled.")
             return {}
 
-    def load_maestro_data(self, file_path: str, equivalencias_map: dict) -> list:
-        # (Content remains the same as before)
-        print(f"Loading maestro data from: {file_path}")
-        # Updated column list - using original consolidado field names
-        maestro_columns = [
-            'Maestro_ID', 'maker', 'model',
-            'series', 'Original_descripcion_Input', 'Normalized_descripcion_Input', 'Confirmed_referencia',
-            'Source', 'Date_Added'
-        ]
-        data_dir = os.path.dirname(file_path)
-        if data_dir and not os.path.exists(data_dir):
-            os.makedirs(data_dir, exist_ok=True)
-        if not os.path.exists(file_path):
-            # Hard fail: these files must always exist
-            raise FileNotFoundError(f"Required Maestro.xlsx not found at {file_path}")
+    def load_maestro_data_from_rules(self, rules_xlsx_path: str, sheet_name: str, equivalencias_map: dict) -> list:
+        print(f"Loading Maestro from sheet '{sheet_name}' in: {rules_xlsx_path}")
+        if not os.path.exists(rules_xlsx_path):
+            raise FileNotFoundError(f"Required rules file not found: {rules_xlsx_path}")
         try:
             import openpyxl
-            wb = openpyxl.load_workbook(file_path, data_only=True)
-            sh = wb.active
-            # Read header
+            wb = openpyxl.load_workbook(rules_xlsx_path, data_only=True)
+            if sheet_name not in wb.sheetnames:
+                raise FileNotFoundError(f"Sheet '{sheet_name}' not found in {rules_xlsx_path}")
+            sh = wb[sheet_name]
+
             headers = [c.value for c in next(sh.iter_rows(min_row=1, max_row=1))]
             col_idx = {h: i for i, h in enumerate(headers)}
+
             maestro_list = []
             for row in sh.iter_rows(min_row=2, values_only=True):
                 entry = {h: row[col_idx[h]] if col_idx.get(h) is not None and col_idx[h] < len(row) else '' for h in headers}
@@ -1559,55 +1357,39 @@ class FixacarApp:
                     if col in entry and _notna(entry[col]):
                         value_str = str(entry[col]).strip()
                         if value_str.startswith("['") and value_str.endswith("']"):
-                            entry[col] = value_str[2:-2]  # Remove [''] format
+                            entry[col] = value_str[2:-2]
                         elif value_str.startswith('[') and value_str.endswith(']'):
-                            entry[col] = value_str[1:-1].strip("'\"")  # Remove [] format
+                            entry[col] = value_str[1:-1].strip("'\"")
 
-                # Handle both old and new column names for backward compatibility
+                # Backward compatible column names
                 original_desc = entry.get('Original_descripcion_Input', entry.get('descripcion', ""))
                 normalized_desc = entry.get('Normalized_descripcion_Input', "")
 
                 if _notna(original_desc):
-                    # Store original description in 'descripcion' and normalized in 'normalized_descripcion'
                     entry['descripcion'] = str(original_desc)
-                    if _notna(normalized_desc) and str(normalized_desc).strip():
-                        entry['normalized_descripcion'] = str(normalized_desc)
-                    else:
-                        # If no normalized version, create one
-                        entry['normalized_descripcion'] = normalize_text(str(original_desc))
                 else:
                     entry['descripcion'] = ""
-                    entry['normalized_descripcion'] = ""
 
-                # Fix bracketed values in integer columns
-                for col in ['Maestro_ID', 'model']:
-                    if col in entry and _notna(entry[col]):
-                        original_value = entry[col]  # Store original value
-                        try:
-                            value_str = str(entry[col]).strip()
-                            if value_str.startswith('[') and value_str.endswith(']'):
-                                value_str = value_str[1:-1].strip("'\"")  # Remove [2012] -> 2012
-                            entry[col] = int(value_str)
-                        except (ValueError, TypeError):
-                            # Keep original value if conversion fails, don't set to None
-                            print(f"Warning: Could not convert {col} value '{original_value}' to integer, keeping original value")
-                            entry[col] = original_value
-
-                # Handle referencia field with new column name
-                referencia_value = entry.get('Confirmed_referencia', entry.get('referencia', ""))
-                if _notna(referencia_value):
-                    entry['referencia'] = str(referencia_value)
+                if _notna(normalized_desc):
+                    entry['normalized_descripcion'] = str(normalized_desc)
                 else:
-                    entry['referencia'] = ""
+                    entry['normalized_descripcion'] = self.unified_text_preprocessing(entry['descripcion']) if entry['descripcion'] else ""
 
-                # Removed Confidence column processing - confidence is calculated dynamically
+                entry['maker'] = entry.get('maker', "")
+                entry['model'] = str(entry.get('model', "") or "")
+                entry['series'] = entry.get('series', "")
+
+                # Confirmed SKU column flexibility
+                entry['referencia'] = entry.get('Confirmed_referencia', entry.get('referencia', "")) or ""
+
                 maestro_list.append(entry)
-            print(f"Loaded {len(maestro_list)} records from Maestro.xlsx.")
+
+            print(f"Loaded {len(maestro_list)} Maestro rows from rules file.")
             return maestro_list
         except Exception as e:
-            print(
-                f"Error loading or processing Maestro.xlsx: {e}. Maestro data will be empty.")
+            print(f"Error reading Maestro from rules file: {e}")
             return []
+
 
     # Removed load_vin_details_from_chunks
 
@@ -1808,8 +1590,22 @@ class FixacarApp:
 
         # Handle multiple sources (comma-separated)
         if ", " in source_name:
-            sources = source_name.split(", ")
-            shortened_sources = [self._shorten_source_name(s.strip()) for s in sources]
+            sources = [s.strip() for s in source_name.split(", ") if s.strip()]
+
+            # Collapse duplicate DB(...) entries — keep only the first one
+            collapsed = []
+            db_seen = False
+            for s in sources:
+                if s.startswith("DB("):
+                    if db_seen:
+                        continue
+                    db_seen = True
+                    collapsed.append(s)
+                else:
+                    if s not in collapsed:
+                        collapsed.append(s)
+
+            shortened_sources = [self._shorten_source_name(s) for s in collapsed]
             return ", ".join(shortened_sources)
 
         # Shorten individual source names
@@ -1913,11 +1709,16 @@ class FixacarApp:
             year_code = vin_up[9] if len(vin_up) > 9 else None
             year = decode_year(year_code) if year_code else None
 
-            hit = vin_lookup_model.get((wmi, vds)) if 'vin_lookup_model' in globals() and vin_lookup_model else None
+            if 'vin_lookup_model' not in globals() or vin_lookup_model is None:
+                raise RuntimeError("VIN lookup model not loaded. Please ensure models/vin/lookup_model.joblib exists.")
+
+            hit = vin_lookup_model.get((wmi, vds))
             if hit:
                 details['maker'] = hit.get('maker', details['maker'])
                 details['model'] = hit.get('model', details['model'])
                 details['series'] = hit.get('series', details['series'])
+            else:
+                raise RuntimeError(f"VIN pattern ({wmi},{vds}) not found in VIN lookup model.")
 
             # Always trust VIN year code over DB mode; override if decoded
             if year:
@@ -1929,12 +1730,8 @@ class FixacarApp:
             return details
 
         except Exception as e:
-            print(f"Error during VIN prediction: {e}")
-            # Handle potential errors if a feature wasn't seen during training
-            messagebox.showwarning(
-                "Prediction Warning", f"Could not reliably predict all details for VIN: {e}")
-            # Return partially filled details if possible
-            return details
+            messagebox.showerror("VIN Prediction Error", str(e))
+            return None
 
     def _clear_results_area(self):
         """Clears the widgets in the scrollable results frame."""
@@ -2113,19 +1910,9 @@ class FixacarApp:
 
                 # STEP 5: Look up equivalencia ID using the expanded form (CASE-INSENSITIVE)
                 equivalencia_id = equivalencias_map_global.get(normalized_expanded.lower())
-
-                # STEP 4: If no direct match, try fuzzy matching as fallback
+                # Fuzzy equivalencias matching removed - only exact matches
                 if equivalencia_id is None:
-                    fuzzy_normalized_desc = self.unified_text_preprocessing(expanded_desc)
-                    equivalencia_id = equivalencias_map_global.get(fuzzy_normalized_desc.lower())
-
-                    if equivalencia_id is not None:
-                        normalized_expanded = fuzzy_normalized_desc
-                        print(f"  Found via fuzzy normalization: EqID {equivalencia_id}")
-
-                    # Fuzzy equivalencias matching removed - only exact matches
-                    if equivalencia_id is None:
-                        print(f"  No exact equivalencia match found for: '{normalized_expanded}'")
+                    print(f"  No exact equivalencia match found for: '{normalized_expanded}'")
 
                 self.processed_parts.append({
                     "original": original_desc,
@@ -2610,6 +2397,24 @@ class FixacarApp:
                         if len(db_suggestions) < 3:
                             db_suggestions.append((referencia, info))
 
+                # Special rule: if the top Maestro and top DB picks are the same SKU, force 1.00 confidence
+                top_maestro_sku = None
+                top_db_sku = None
+                for ref, inf in all_suggestions:
+                    sources_str = inf.get('all_sources', inf.get('source', ''))
+                    if top_maestro_sku is None and 'Maestro' in sources_str:
+                        top_maestro_sku = ref
+                    if top_db_sku is None and 'DB' in sources_str:
+                        top_db_sku = ref
+                    if top_maestro_sku and top_db_sku:
+                        break
+                if top_maestro_sku and top_db_sku and top_maestro_sku == top_db_sku:
+                    # Elevate confidence to 1.00 for the consensus top pick
+                    for lst in (all_suggestions, maestro_suggestions, db_suggestions):
+                        for ref, inf in lst:
+                            if ref == top_maestro_sku:
+                                inf['confidence'] = 1.00
+
                 # Combine all limited suggestions and sort by confidence
                 suggestions_list = maestro_suggestions + nn_suggestions + db_suggestions
                 suggestions_list.sort(key=lambda x: x[1].get('confidence', 0), reverse=True)
@@ -3064,35 +2869,46 @@ class FixacarApp:
 
         if added_count > 0:
             print(
-                f"Attempting to save {added_count} new entries to {DEFAULT_MAESTRO_PATH}...")
+                f"Attempting to save {added_count} new entries to Text_Processing_Rules.xlsx (sheet '{DEFAULT_MAESTRO_SHEET}')...")
             try:
-                # Using original consolidado field names with new Maestro column structure
+                import openpyxl
+                # Load existing workbook and write Maestro sheet
+                wb = openpyxl.load_workbook(DEFAULT_TEXT_PROCESSING_PATH)
+                if DEFAULT_MAESTRO_SHEET in wb.sheetnames:
+                    sh = wb[DEFAULT_MAESTRO_SHEET]
+                    # Clear previous rows except header
+                    if sh.max_row > 1:
+                        sh.delete_rows(2, sh.max_row - 1)
+                else:
+                    sh = wb.create_sheet(DEFAULT_MAESTRO_SHEET)
+                    maestro_columns = [
+                        'Maestro_ID', 'maker', 'model',
+                        'series', 'Original_descripcion_Input',
+                        'Normalized_descripcion_Input', 'Confirmed_referencia',
+                        'Source', 'Date_Added'
+                    ]
+                    sh.append(maestro_columns)
+                # Append rows
                 maestro_columns = [
                     'Maestro_ID', 'maker', 'model',
                     'series', 'Original_descripcion_Input',
                     'Normalized_descripcion_Input', 'Confirmed_referencia',
                     'Source', 'Date_Added'
                 ]
-                # Write using openpyxl
-                import openpyxl
-                wb = openpyxl.Workbook()
-                sh = wb.active
-                sh.title = 'Sheet1'
-                sh.append(maestro_columns)
                 for row in maestro_data_global:
                     sh.append([row.get(col, '') for col in maestro_columns])
-                wb.save(DEFAULT_MAESTRO_PATH)
+                wb.save(DEFAULT_TEXT_PROCESSING_PATH)
                 messagebox.showinfo(
-                    "Save Successful", f"{added_count} new confirmation(s) saved to Maestro.xlsx.")
+                    "Save Successful", f"{added_count} new confirmation(s) saved to Maestro sheet in Text_Processing_Rules.xlsx.")
                 print(
                     f"Successfully saved {added_count} new entries. Total Maestro entries: {len(maestro_data_global)}")
             except Exception as e:
                 messagebox.showerror(
-                    "Save Error", f"Failed to write to Maestro.xlsx: {e}")
-                print(f"Error writing Maestro.xlsx: {e}")
+                    "Save Error", f"Failed to write Maestro sheet: {e}")
+                print(f"Error writing Maestro sheet: {e}")
         elif skipped_count > 0:
             messagebox.showinfo(
-                "Already Saved", "The selected confirmations were already present in Maestro.xlsx.")
+                "Already Saved", "The selected confirmations were already present in Maestro.")
             print(f"Skipped {skipped_count} duplicate entries.")
         else:
             messagebox.showinfo(
@@ -3108,13 +2924,12 @@ if __name__ == '__main__':
     current_dir = os.getcwd()
     print(f"Current working directory: {current_dir}")
     print(f"Expected Text_Processing_Rules.xlsx at: {os.path.join(current_dir, DEFAULT_TEXT_PROCESSING_PATH)}")
-    print(f"Expected Maestro.xlsx at: {os.path.join(current_dir, DEFAULT_MAESTRO_PATH)}")
+    print(f"Expected Maestro sheet: {DEFAULT_MAESTRO_SHEET}")
     print(f"Expected fixacar_history.db at: {os.path.join(current_dir, DEFAULT_DB_PATH)}")
 
     # Check if critical files exist
     critical_files = [
-        (DEFAULT_TEXT_PROCESSING_PATH, "Text Processing Rules"),
-        (DEFAULT_MAESTRO_PATH, "Maestro Data"),
+        (DEFAULT_TEXT_PROCESSING_PATH, "Text Processing Rules (incl. Maestro)"),
         (DEFAULT_DB_PATH, "Database")
     ]
 

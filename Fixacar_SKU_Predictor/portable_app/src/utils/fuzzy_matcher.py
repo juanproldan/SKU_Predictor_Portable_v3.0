@@ -205,61 +205,30 @@ def expand_abbreviations(text: str) -> str:
 
 def normalize_gender_and_plurals(text: str) -> str:
     """
-    Normalizes gender variations and plurals to a consistent form.
-
-    Examples:
-    - derecho/derecha -> derecha (feminine as standard)
-    - izquierdo/izquierda -> izquierda (feminine as standard)
-    - delantero/delantera -> delantera (feminine as standard)
-    - farola/farolas -> farola (singular as standard)
-    - paragolpe/paragolpes -> paragolpes (plural as standard for this specific case)
-
-    Args:
-        text: Input text to normalize
-
-    Returns:
-        Text with gender and plural variations normalized
+    Legacy helper. Gender normalization only; NO plural/singular changes.
+    Kept for compatibility with callers that expect this function.
     """
     if not isinstance(text, str):
         return ""
 
     words = text.split()
-    normalized_words = []
+    out = []
 
-    # Gender normalization map (masculine -> feminine)
     gender_map = {
         "derecho": "derecha",
         "izquierdo": "izquierda",
         "delantero": "delantera",
         "trasero": "trasera",
-        "anterior": "anterior",  # No change
-        "posterior": "posterior",  # No change
-        "superior": "superior",  # No change
-        "inferior": "inferior",  # No change
+        "anterior": "anterior",
+        "posterior": "posterior",
+        "superior": "superior",
+        "inferior": "inferior",
     }
 
-    # Plural normalization map (context-dependent)
-    plural_map = {
-        "farolas": "farola",  # Singular for lights
-        "luces": "luz",       # Singular for lights
-        "espejos": "espejo",  # Singular for mirrors
-        "puertas": "puerta",  # Singular for doors
-        "paragolpe": "paragolpes",  # Plural for bumpers (this is the standard form)
-        "guardafangos": "guardafango",  # Singular for fenders
-        "guardabarros": "guardabarro",  # Singular for mudguards
-    }
+    for w in words:
+        out.append(gender_map.get(w, w))
 
-    for word in words:
-        # First check gender normalization
-        if word in gender_map:
-            normalized_words.append(gender_map[word])
-        # Then check plural normalization
-        elif word in plural_map:
-            normalized_words.append(plural_map[word])
-        else:
-            normalized_words.append(word)
-
-    return " ".join(normalized_words)
+    return " ".join(out)
 
 
 def split_compound_words(text: str) -> str:

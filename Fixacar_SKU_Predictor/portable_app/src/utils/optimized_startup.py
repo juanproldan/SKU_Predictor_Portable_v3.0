@@ -103,8 +103,7 @@ class OptimizedDataLoader:
 
         rules = {
             'equivalencias': {},
-            'abbreviations': {},
-            'user_corrections': {}
+            'abbreviations': {}
         }
 
         # Process sheets if present
@@ -116,10 +115,6 @@ class OptimizedDataLoader:
             ab = rec.get('Abbreviation'); full = rec.get('Full_Form')
             if ab and full:
                 rules['abbreviations'][str(ab).lower().strip()] = str(full).lower().strip()
-        for rec in excel_data.get('User_Corrections', []):
-            orig = rec.get('Original'); corr = rec.get('Corrected')
-            if orig and corr:
-                rules['user_corrections'][str(orig).lower().strip()] = str(corr).lower().strip()
 
         # Cache processed rules
         try:

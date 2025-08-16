@@ -21,6 +21,7 @@ _abbrev_map_cache: Dict[str, str] | None = None
 _equiv_map_cache: Dict[str, str] | None = None
 _usercorr_map_cache: Dict[str, str] | None = None
 _noun_gender_map_cache: Dict[str, str] | None = None  # noun (accentless lowercase) -> 'm'|'f'
+_phrase_abbrev_map_cache: Dict[str, str] | None = None  # phrase-level expansions
 
 
 def _rules_path() -> str:
@@ -109,22 +110,8 @@ def _load_equiv_map() -> Dict[str, str]:
 
 
 def _load_usercorr_map() -> Dict[str, str]:
-    """User Corrections: exact replacements learned from users (phrase level)."""
-    import openpyxl
-    path = _rules_path()
-    if not os.path.exists(path):
-        return {}
-    wb = openpyxl.load_workbook(path, data_only=True)
-    if 'User_Corrections' not in wb.sheetnames:
-        return {}
-    sh = wb['User_Corrections']
-    m: Dict[str, str] = {}
-    for row in sh.iter_rows(min_row=2, values_only=True):
-        vals = [str(v).strip() for v in row if v is not None and str(v).strip()]
-        if len(vals) >= 2:
-            original, corrected = vals[0].lower(), vals[1].lower()
-            m[original] = corrected
-    return m
+    """Deprecated: User Corrections are no longer used. Return empty map."""
+    return {}
 
 
 def _load_noun_gender_map() -> Dict[str, str]:
@@ -169,19 +156,10 @@ _common_gender_pairs = {
     # Intentionally minimal — avoid automatic gender flips that cause errors.
 }
 
+# Extra known noun genders to enforce adjective agreement even if sheet lacks the entry
+_EXTRA_NOUN_GENDERS = { 'paragolpes': 'm' }
 
 
-def _singularize_token(tok: str) -> str:
-    # luces -> luz (ces -> z)
-    if tok.endswith('ces') and len(tok) > 3:
-        return tok[:-3] + 'z'
-    # plural es -> remove es
-    if tok.endswith('es') and len(tok) > 3:
-        return tok[:-2]
-    # plural s -> remove s
-    if tok.endswith('s') and len(tok) > 3:
-        return tok[:-1]
-    return tok
 
 
 def _gender_normalize_token(tok: str) -> str:
@@ -217,6 +195,30 @@ def _expand_abbreviations(text: str) -> str:
     return ' '.join(expanded)
 
 
+def _load_phrase_abbrev_map() -> Dict[str, str]:
+    """Load phrase-level abbreviation mappings from 'Abbreviations_Phrases' sheet.
+    Schema: From | To (headers in row 1)
+    Case-insensitive; matches are applied before token-level expansion.
+    """
+    import openpyxl
+    path = _rules_path()
+    if not os.path.exists(path):
+        return {}
+    wb = openpyxl.load_workbook(path, data_only=True)
+    if 'Abbreviations_Phrases' not in wb.sheetnames:
+        return {}
+    sh = wb['Abbreviations_Phrases']
+    m: Dict[str, str] = {}
+    for row in sh.iter_rows(min_row=2, values_only=True):
+        if not row or row[0] is None or row[1] is None:
+            continue
+        src = _strip_accents(str(row[0]).strip().lower())
+        dst = _strip_accents(str(row[1]).strip().lower())
+        if src and dst:
+            m[src] = dst
+    return m
+
+
 def _apply_equivalencias(text: str) -> str:
     """
     DEPRECATED for normalization: Equivalencias define synonym GROUPS for matching/comparison,
@@ -244,6 +246,11 @@ def _apply_adjective_agreement(tokens: list[str], noun_gender: Dict[str, str]) -
     # Precompute accentless lower tokens for lookup
     base = [_strip_accents(t.lower()) for t in tokens]
     n = len(tokens)
+
+    # Merge external noun genders with extra built-ins
+    noun_gender_full = dict(noun_gender)
+    noun_gender_full.update(_EXTRA_NOUN_GENDERS)
+
     for i, bt in enumerate(base):
         # detect adjective forms or their abbreviations expanded earlier
         match = None
@@ -257,14 +264,14 @@ def _apply_adjective_agreement(tokens: list[str], noun_gender: Dict[str, str]) -
         g = None
         for j in range(i+1, min(i+6, n)):
             w = base[j]
-            if w in noun_gender:
-                g = noun_gender[w]
+            if w in noun_gender_full:
+                g = noun_gender_full[w]
                 break
         if g is None:
             for j in range(i-1, max(-1, i-6), -1):
                 w = base[j]
-                if w in noun_gender:
-                    g = noun_gender[w]
+                if w in noun_gender_full:
+                    g = noun_gender_full[w]
                     break
         if g is None:
             continue
@@ -277,17 +284,24 @@ def unified_text_preprocessing(text: str) -> str:
     """Shared description normalization without spaCy or external fallbacks."""
     if text is None or str(text).strip() == '':
         return ''
-    # Step 1: user corrections first (original casing)
-    t = _apply_user_corrections(str(text))
+    # Step 1: user corrections removed — use input as-is (original casing)
+    t = str(text)
     # Step 2: lowercase and strip accents for processing
     t = _strip_accents(t.lower())
+    # Step 2b: phrase-level abbreviations before tokenization (e.g., "tra d" -> "trasero derecho")
+    global _phrase_abbrev_map_cache
+    if _phrase_abbrev_map_cache is None:
+        _phrase_abbrev_map_cache = _load_phrase_abbrev_map()
+    if _phrase_abbrev_map_cache:
+        for src, dst in _phrase_abbrev_map_cache.items():
+            t = re.sub(rf"(?<![a-z0-9]){re.escape(src)}(?![a-z0-9])", dst, t)
     # Step 3: abbreviations expansion (token-level)
     t = _expand_abbreviations(t)
     # Step 4: RESERVED — Equivalencias are NOT used for normalization.
     #         They are applied only during matching/comparison as synonym groups.
-    # Step 5: linguistic normalization (gender/plural heuristics)
+    # Step 5: linguistic normalization (gender heuristics only; NO plural→singular)
     toks = t.split()
-    toks = [_singularize_token(tok) for tok in toks]
+    # Do NOT singularize tokens anymore
     # Do not apply generic gender flips
     toks = [_gender_normalize_token(tok) for tok in toks]
     # Step 5b: targeted adjective agreement using Noun_Gender sheet

@@ -5,7 +5,7 @@ Text_Processing_Rules.xlsx sheet 'NewAbbreviations2'.
 
 Differences vs generate_new_abbreviations.py:
 - One row per (word, abbreviation) pair (words may repeat across rows)
-- Columns: Word | Abbr. 1 | Normalized_descripcion | frequency | Normalized_descripcion02 | Approve?
+- Columns: Word | Abbr. 1 | Normalized_descripcion | frequency | Normalized_descripcion02 | frequency02 | Approve?
 - Dedups against existing pairs in Abbreviations and NewAbbreviations2
 - If the word cannot be confidently inferred, Word is left blank (abbreviation is still proposed)
 - Sheet is cleared on each run to regenerate fresh suggestions (no append)
@@ -134,7 +134,8 @@ def load_or_create_new_sheet(wb):
         sh.cell(1, 3, 'Normalized_descripcion')
         sh.cell(1, 4, 'frequency')
         sh.cell(1, 5, 'Normalized_descripcion02')
-        sh.cell(1, 6, 'Approve?')
+        sh.cell(1, 6, 'frequency02')
+        sh.cell(1, 7, 'Approve?')
     else:
         sh = wb['NewAbbreviations2']
         # Ensure headers exist
@@ -144,7 +145,8 @@ def load_or_create_new_sheet(wb):
         if 'normalized_descripcion' not in headers: sh.cell(1, 3, 'Normalized_descripcion')
         if 'frequency' not in headers: sh.cell(1, 4, 'frequency')
         if 'normalized_descripcion02' not in headers: sh.cell(1, 5, 'Normalized_descripcion02')
-        if 'approve?' not in headers: sh.cell(1, 6, 'Approve?')
+        if 'frequency02' not in headers: sh.cell(1, 6, 'frequency02')
+        if 'approve?' not in headers: sh.cell(1, 7, 'Approve?')
     return sh
 
 
@@ -241,7 +243,7 @@ def main():
     candidates = [t for t, f in token_counts.items() if is_potential_abbr(t, f)]
 
     # Collect new rows as a list of tuples to allow frequency sorting
-    rows: List[Tuple[str, str, str, int, str]] = []  # (word, abbr, desc1, freq, desc2)
+    rows: List[Tuple[str, str, str, int, str, int]] = []  # (word, abbr, desc1, freq, desc2, freq2)
 
     for a in candidates:
         # compute top 2 normalized_descripcion candidates
@@ -250,6 +252,7 @@ def main():
         best_desc = top2[0][0] if len(top2) >= 1 else ''
         second_desc = top2[1][0] if len(top2) >= 2 else ''
         best_freq = desc_counts.get(best_desc, 0)
+        second_freq = desc_counts.get(second_desc, 0)
         # map to word
         word, _ = pick_word_for_abbr(a, token_counts, canonical_pool, contexts)
         if word is not None and word == a:
@@ -260,20 +263,21 @@ def main():
         if (word or '', a) in rejects_set:
             continue
         # Add row
-        rows.append((word or '', a, best_desc or '', best_freq, second_desc or ''))
+        rows.append((word or '', a, best_desc or '', best_freq, second_desc or '', second_freq))
 
     # Sort rows by frequency desc
     rows.sort(key=lambda r: (r[3], r[2]), reverse=True)
 
     # Append rows
-    for word, abbr, desc1, freq, desc2 in rows:
+    for word, abbr, desc1, freq, desc2, freq2 in rows:
         r = sh.max_row + 1
         sh.cell(r, 1, word)
         sh.cell(r, 2, abbr)
         sh.cell(r, 3, desc1)
         sh.cell(r, 4, freq)
         sh.cell(r, 5, desc2)
-        sh.cell(r, 6, '')  # Approve?
+        sh.cell(r, 6, freq2)
+        sh.cell(r, 7, '')  # Approve?
 
     wb.save(XLSX)
     print(f"NewAbbreviations2 regenerated in {XLSX}. Rows: {len(rows)}")

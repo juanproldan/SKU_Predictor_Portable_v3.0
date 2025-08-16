@@ -11,8 +11,7 @@ This document is the single source of truth for the Fixacar SKU Predictor v3.0 p
 ## 2. Canonical Data Locations (Source_Files/)
 - Consolidado.json — input (ignored by Git)
 - processed_consolidado.db — generated output (ignored by Git; always rebuilt)
-- Text_Processing_Rules.xlsx — tracked in Git (must include Noun_Gender sheet)
-- Maestro.xlsx — tracked in Git
+- Text_Processing_Rules.xlsx — tracked in Git (must include Noun_Gender and Maestro sheets)
 
 ## 3. Processing Pipeline (Step 2)
 - Implemented in scripts/02_process_data_polars.py and portable_app/src/.
@@ -40,7 +39,8 @@ This document is the single source of truth for the Fixacar SKU Predictor v3.0 p
 - Uses sku_year_ranges for frequency- and year-aware SKU prediction.
 
 ## 6. Text_Processing_Rules.xlsx
-- Tabs used: Equivalencias, Abbreviations, User_Corrections, Series, Noun_Gender.
+- Tabs used: Equivalencias, Abbreviations, Series, Noun_Gender, Maestro.
+- Deprecated: User_Corrections (no longer read or written by any script).
 - Noun_Gender sheet requirements:
   - Columns: noun, gender (m/f).
   - Content derived from normalized descriptions; abbreviations (iz, der, tra, etc.) must not be added as nouns.
