@@ -266,7 +266,13 @@ def setup_database(db_path):
         )
         ''')
 
-
+        # Metadata table for build reproducibility
+        cursor.execute('''
+        CREATE TABLE metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+        ''')
 
         # Create indexes for better query performance
         cursor.execute('CREATE INDEX idx_vin_training ON processed_consolidado (vin_number, maker, model, series)')
@@ -704,6 +710,32 @@ def build_vin_prefix_frequencies(conn: sqlite3.Connection) -> int:
     conn.create_function("is_valid_vin", 1, _is_valid_vin)
 
     # Rebuild table
+
+
+def write_metadata(conn: sqlite3.Connection, extra: dict):
+    import hashlib
+    cur = conn.cursor()
+    # Compute checksum of rules file
+    checksum = ""
+    try:
+        with open(TEXT_PROCESSING_PATH, 'rb') as f:
+            checksum = hashlib.sha256(f.read()).hexdigest()
+    except Exception:
+        checksum = ""
+    from datetime import datetime as _dt
+    now = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
+    items = {
+        "processor_version": "3.0",
+        "rules_checksum": checksum,
+        "build_timestamp": now,
+    }
+    items.update({k: str(v) for k, v in (extra or {}).items()})
+    # Clear and insert
+    cur.execute('DELETE FROM metadata')
+    for k, v in items.items():
+        cur.execute('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)', (k, v))
+    conn.commit()
+
     cur.execute('DROP TABLE IF EXISTS vin_prefix_frequencies')
     cur.execute(
         '''
@@ -1095,6 +1127,17 @@ def main(verbose: bool = False):
             # Year range statistics
             cursor.execute("SELECT COUNT(*) FROM sku_year_ranges")
             sku_year_ranges = cursor.fetchone()[0]
+
+            # Write metadata
+            cfg = load_config()
+            write_metadata(conn, {
+                'total_records': total_records,
+                'vin_training_ready': vin_training_ready,
+                'sku_training_ready': sku_training_ready,
+                'sku_year_ranges': sku_year_ranges,
+                'vin_prefix_rows': vin_prefix_rows,
+                'year_start': cfg.get('year_start', DEFAULT_YEAR_START),
+            })
 
 
 
