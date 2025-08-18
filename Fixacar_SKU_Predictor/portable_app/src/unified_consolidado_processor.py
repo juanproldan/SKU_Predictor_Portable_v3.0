@@ -1059,9 +1059,8 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                 'Both Training Records': f"{stats['both_training_records']:,}",
                 'Skipped (Insufficient)': f"{stats['skipped_insufficient_data']:,}",
                 'Skipped (Duplicates)': f"{stats['skipped_duplicates']:,}",
-                'Processing Rate': f"{stats['total_records']/total_processing_time:.0f} rec/s"
+                'Processing Rate': f"{stats['total_records']/total_processing_time:.0f} rec/s",
                 'Skipped (Out-of-range Year)': f"{stats['skipped_out_of_range_year']:,}",
-
             }
             log_operation_complete(logger, "Consolidado Processing", total_processing_time, processing_stats)
         except ImportError:
