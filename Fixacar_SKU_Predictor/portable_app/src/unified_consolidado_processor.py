@@ -65,7 +65,6 @@ LOGS_DIR = os.path.join(BASE_PATH, "logs")
 # File paths - everything in Source_Files for client structure
 CONSOLIDADO_PATH = os.path.join(DATA_DIR, "Consolidado.json")
 TEXT_PROCESSING_PATH = os.path.join(DATA_DIR, "Text_Processing_Rules.xlsx")
-WMI_CSV_PATH = os.path.join(DATA_DIR, "WMI.csv")
 OUTPUT_DB_PATH = os.path.join(DATA_DIR, "processed_consolidado.db")
 LOG_PATH = os.path.join(LOGS_DIR, f"consolidado_processing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
@@ -908,16 +907,6 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
             model = record.get('model')  # Field is 'model'
             series = record.get('series')  # Field is 'series'
 
-            # If WMI registry is available, log unknown WMIs (first 3 chars)
-            try:
-                wmi_set = getattr(logger, 'wmi_registry', set())
-                if vin_number and len(vin_number) >= 3 and validate_vin_format(vin_number):
-                    wmi = vin_number[:3]
-                    if wmi_set and wmi not in wmi_set:
-                        logger.warning(f"Unknown WMI encountered: {wmi} for VIN prefix {vin_number[:11]}...")
-            except Exception:
-                pass
-
             # Process each item in the record
             for item in items:
                 # Combine record-level and item-level data (simplified schema)
@@ -1068,19 +1057,6 @@ def main(verbose: bool = False):
     logger.info("Loading series normalization rules...")
     series_map = load_series_normalization_map(TEXT_PROCESSING_PATH)
 
-    # Load WMI registry if present (for logging unknown WMIs)
-    wmi_registry = set()
-    if os.path.exists(WMI_CSV_PATH):
-        try:
-            with open(WMI_CSV_PATH, 'r', encoding='utf-8') as f:
-                for line in f:
-                    code = line.strip().upper()
-                    if code and len(code) >= 3:
-                        wmi_registry.add(code[:3])
-            logger.info(f"Loaded {len(wmi_registry)} WMI codes from WMI.csv")
-        except Exception as e:
-            logger.warning(f"Could not read WMI.csv: {e}")
-
     # Load unified text processing maps (hard-fail on problems)
     logger.info("Loading unified text processing maps...")
     global user_corrections_map_global, abbreviations_map_global, synonym_expansion_map_global
@@ -1101,9 +1077,6 @@ def main(verbose: bool = False):
 
     # Setup database
     logger.info("Setting up database...")
-
-    # Attach WMI registry to logger for later use
-    logger.wmi_registry = wmi_registry
     conn = setup_database(OUTPUT_DB_PATH)
     if not conn:
         logger.error("Failed to setup database. Aborting.")
