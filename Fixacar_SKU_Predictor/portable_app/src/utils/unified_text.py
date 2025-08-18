@@ -197,7 +197,8 @@ def _expand_abbreviations(text: str) -> str:
 
 def _load_phrase_abbrev_map() -> Dict[str, str]:
     """Load phrase-level abbreviation mappings from 'Abbreviations_Phrases' sheet.
-    Schema: From | To (headers in row 1)
+    Schema: From_Phrase | To_Phrase | Confidence | Notes (row 1 headers)
+    Only include rows with Confidence in {high, medium}.
     Case-insensitive; matches are applied before token-level expansion.
     """
     import openpyxl
@@ -208,12 +209,23 @@ def _load_phrase_abbrev_map() -> Dict[str, str]:
     if 'Abbreviations_Phrases' not in wb.sheetnames:
         return {}
     sh = wb['Abbreviations_Phrases']
+    # Build header index map
+    headers = { (str(sh.cell(1, c).value or '').strip().lower()): c for c in range(1, sh.max_column+1) }
+    col_from = headers.get('from_phrase', 1)
+    col_to = headers.get('to_phrase', 2)
+    col_conf = headers.get('confidence', None)
+    allowed = {'high', 'medium'}
     m: Dict[str, str] = {}
-    for row in sh.iter_rows(min_row=2, values_only=True):
-        if not row or row[0] is None or row[1] is None:
+    for r in range(2, sh.max_row + 1):
+        src_val = sh.cell(r, col_from).value
+        dst_val = sh.cell(r, col_to).value
+        conf_val = (sh.cell(r, col_conf).value if col_conf else '').strip().lower() if (col_conf and sh.cell(r, col_conf).value is not None) else ''
+        if col_conf and conf_val not in allowed:
             continue
-        src = _strip_accents(str(row[0]).strip().lower())
-        dst = _strip_accents(str(row[1]).strip().lower())
+        if src_val is None or dst_val is None:
+            continue
+        src = _strip_accents(str(src_val).strip().lower())
+        dst = _strip_accents(str(dst_val).strip().lower())
         if src and dst:
             m[src] = dst
     return m
