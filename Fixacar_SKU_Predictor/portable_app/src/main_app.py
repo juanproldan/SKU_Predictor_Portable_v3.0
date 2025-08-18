@@ -2418,6 +2418,8 @@ class FixacarApp:
                 # Combine all limited suggestions and sort by confidence
                 suggestions_list = maestro_suggestions + nn_suggestions + db_suggestions
                 suggestions_list.sort(key=lambda x: x[1].get('confidence', 0), reverse=True)
+                # Show up to 2 SKUs total (ordered by final confidence)
+                suggestions_list = suggestions_list[:2]
 
                 print(f"    📊 Results for '{original_desc}': Maestro={len(maestro_suggestions)}, NN={len(nn_suggestions)}, DB={len(db_suggestions)}, Total={len(suggestions_list)}")
 
