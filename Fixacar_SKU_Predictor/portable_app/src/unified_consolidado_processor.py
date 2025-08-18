@@ -614,10 +614,6 @@ def aggregate_sku_year_ranges(conn):
 
     # Get all SKU combinations with their years and frequencies
     # Enforce valid model year bounds in aggregation
-    from datetime import datetime as _dt
-    cfg = load_config()
-    _min_year = int(cfg.get("year_start", DEFAULT_YEAR_START))
-    _max_year = _dt.now().year + 2
     cursor.execute("""
         SELECT maker, series, descripcion, normalized_descripcion, referencia, model, COUNT(*) as frequency
         FROM processed_consolidado
@@ -628,10 +624,9 @@ def aggregate_sku_year_ranges(conn):
         AND maker IS NOT NULL
         AND series IS NOT NULL
         AND model IS NOT NULL
-        AND model BETWEEN ? AND ?
         GROUP BY maker, series, descripcion, normalized_descripcion, referencia, model
         ORDER BY maker, series, referencia, model
-    """, (_min_year, _max_year))
+    """)
 
     raw_data = cursor.fetchall()
     logger.info(f"📊 Processing {len(raw_data):,} individual year records for SKU aggregation")
@@ -899,7 +894,8 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
         'skipped_duplicates': 0,
         'vin_training_records': 0,
         'sku_training_records': 0,
-        'both_training_records': 0
+        'both_training_records': 0,
+        'skipped_out_of_range_year': 0,
     }
 
     try:
@@ -913,6 +909,12 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
         cursor = conn.cursor()
 
         # Start processing timer
+        # Load config for early year filtering
+        cfg = load_config()
+        from datetime import datetime as _dt
+        _min_year = int(cfg.get("year_start", DEFAULT_YEAR_START))
+        _max_year = _dt.now().year + 2
+
         processing_start_time = time.time()
 
         # Process each record with progress bar
@@ -934,6 +936,7 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
         progress_interval = max(1000, stats['total_records'] // 100)  # Report every 1% or 1000 records, whichever is larger
 
         for record_idx, record in enumerate(all_records):
+            # Early record-level year filter: skip entire record if model out of range
             # Update progress bar or fallback to text progress
             if progress_bar:
                 progress_bar.update(1)
@@ -941,6 +944,18 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                 elapsed = time.time() - processing_start_time
                 rate = record_idx / elapsed if elapsed > 0 else 0
                 eta_seconds = (stats['total_records'] - record_idx) / rate if rate > 0 else 0
+
+            # Early record-level year filter: skip entire record if model out of range
+            try:
+                _raw_model = record.get('model')
+                _rec_year = int(str(_raw_model)) if (_raw_model is not None and str(_raw_model).isdigit()) else None
+            except Exception:
+                _rec_year = None
+            if _rec_year is None or not (_min_year <= _rec_year <= _max_year):
+                stats['skipped_out_of_range_year'] += 1
+                continue
+
+
                 eta_minutes = eta_seconds / 60
 
                 progress_pct = (record_idx / stats['total_records']) * 100
@@ -1045,6 +1060,8 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                 'Skipped (Insufficient)': f"{stats['skipped_insufficient_data']:,}",
                 'Skipped (Duplicates)': f"{stats['skipped_duplicates']:,}",
                 'Processing Rate': f"{stats['total_records']/total_processing_time:.0f} rec/s"
+                'Skipped (Out-of-range Year)': f"{stats['skipped_out_of_range_year']:,}",
+
             }
             log_operation_complete(logger, "Consolidado Processing", total_processing_time, processing_stats)
         except ImportError:
