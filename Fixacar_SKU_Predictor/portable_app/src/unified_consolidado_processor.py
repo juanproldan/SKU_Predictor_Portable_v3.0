@@ -769,7 +769,11 @@ def write_metadata(conn: sqlite3.Connection, extra: dict):
     conn.commit()
 
     cur.execute('SELECT COUNT(*) FROM vin_prefix_frequencies')
-    return cur.fetchone()[0]
+    row = cur.fetchone()
+    try:
+        return int(row[0]) if row and row[0] is not None else 0
+    except Exception:
+        return 0
 
 
 
