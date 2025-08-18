@@ -64,6 +64,8 @@ LOGS_DIR = os.path.join(BASE_PATH, "logs")
 # File paths - everything in Source_Files for client structure
 CONSOLIDADO_PATH = os.path.join(DATA_DIR, "Consolidado.json")
 TEXT_PROCESSING_PATH = os.path.join(DATA_DIR, "Text_Processing_Rules.xlsx")
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+
 OUTPUT_DB_PATH = os.path.join(DATA_DIR, "processed_consolidado.db")
 LOG_PATH = os.path.join(LOGS_DIR, f"consolidado_processing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
@@ -80,6 +82,8 @@ def setup_logging(verbose: bool = False):
         from utils.logging_config import get_logger, create_processing_config, log_operation_start
         config = create_processing_config(verbose=verbose)
         return get_logger("consolidado_processor", config)
+
+
     except ImportError:
         # Fallback to basic logging if logging_config not available
         os.makedirs(LOGS_DIR, exist_ok=True)
@@ -109,6 +113,7 @@ def validate_vin_format(vin_str):
         return False
 
     # After canonicalization, VIN should only contain A-H, J-N, P, R-Z, 0-9
+
     import re
     if not re.match(r'^[A-HJ-NPR-Z0-9]{17}$', vin_str):
         return False
@@ -135,6 +140,24 @@ def validate_vin_check_digit(vin_str):
 
     # Position weights for check digit calculation
     weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2]
+# Config: year_start in Source_Files/config.json (default 1990)
+DEFAULT_YEAR_START = 1990
+
+def load_config():
+    cfg = {"year_start": DEFAULT_YEAR_START}
+    try:
+        if os.path.exists(CONFIG_PATH):
+            import json
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    y = data.get("year_start")
+                    if isinstance(y, int):
+                        cfg["year_start"] = y
+    except Exception:
+        pass
+    return cfg
+
 
     try:
         total = sum(char_values[char] * weight for char, weight in zip(vin_str, weights))
@@ -586,7 +609,8 @@ def aggregate_sku_year_ranges(conn):
     # Get all SKU combinations with their years and frequencies
     # Enforce valid model year bounds in aggregation
     from datetime import datetime as _dt
-    _min_year = 1990
+    cfg = load_config()
+    _min_year = int(cfg.get("year_start", DEFAULT_YEAR_START))
     _max_year = _dt.now().year + 2
     cursor.execute("""
         SELECT maker, series, descripcion, normalized_descripcion, referencia, model, COUNT(*) as frequency
