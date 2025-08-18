@@ -5,7 +5,7 @@
     "wmi",
     "vds"
   ],
-  "n_rows": 61099,
-  "n_keys": 1274,
-  "elapsed_s": 0.295
+  "n_rows": 60972,
+  "n_keys": 1261,
+  "elapsed_s": 0.32
 }

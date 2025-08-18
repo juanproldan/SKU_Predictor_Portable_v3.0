@@ -38,8 +38,7 @@ if SRC_DIR not in sys.path:
 # Use the single shared text processor; no legacy/text_utils fallbacks
 from utils.unified_text import unified_text_preprocessing
 
-# Global variables for text processing maps
-user_corrections_map_global = {}
+# Global variables for text processing maps (User_Corrections removed)
 abbreviations_map_global = {}
 synonym_expansion_map_global = {}
 
@@ -298,37 +297,6 @@ def load_equivalencias_map(text_processing_path):
         logger.error(f"Error loading equivalencias map: {e}")
         raise
 
-def load_user_corrections_map(text_processing_path):
-    """
-    Load user corrections mapping from Text_Processing_Rules.xlsx User_Corrections tab.
-    Returns dictionary mapping original text to corrected text.
-    """
-    logger = logging.getLogger(__name__)
-
-    if not os.path.exists(text_processing_path):
-        logger.warning(f"Text processing rules file not found at {text_processing_path}")
-        return {}
-
-    try:
-        wb = openpyxl.load_workbook(text_processing_path, data_only=True)
-        sh = wb['User_Corrections']
-        headers = [c.value for c in next(sh.iter_rows(min_row=1, max_row=1))]
-        col_idx = {h: i for i, h in enumerate(headers)}
-        corrections_map = {}
-        for row in sh.iter_rows(min_row=2, values_only=True):
-            orig = row[col_idx.get('Original_Text', 0)]
-            corr = row[col_idx.get('Corrected_Text', 1)]
-            if orig is not None and corr is not None:
-                original = str(orig).strip()
-                corrected = str(corr).strip()
-                if original and corrected:
-                    corrections_map[original] = corrected
-        logger.info(f"Loaded {len(corrections_map)} user corrections")
-        return corrections_map
-
-    except Exception as e:
-        logger.error(f"Error loading user corrections map: {e}")
-        return {}
 
 def load_abbreviations_map(text_processing_path):
     """
@@ -472,21 +440,6 @@ def normalize_series_preprocessing(maker, series, series_map):
     return series
 
 # --- Unified Text Processing Functions ---
-def apply_user_corrections(text: str) -> str:
-    """
-    Apply user corrections from the User_Corrections tab.
-    This has the HIGHEST priority in text processing.
-    """
-    if not text or not user_corrections_map_global:
-        return text
-
-    # Check for exact phrase match first (highest priority)
-    if text in user_corrections_map_global:
-        corrected = user_corrections_map_global[text]
-        # Removed verbose logging for performance
-        return corrected
-
-    return text
 
 def apply_abbreviations(text: str) -> str:
     """
@@ -1059,10 +1012,7 @@ def main(verbose: bool = False):
 
     # Load unified text processing maps (hard-fail on problems)
     logger.info("Loading unified text processing maps...")
-    global user_corrections_map_global, abbreviations_map_global, synonym_expansion_map_global
-
-    user_corrections_map_global = load_user_corrections_map(TEXT_PROCESSING_PATH)
-    logger.info(f"Loaded {len(user_corrections_map_global)} user corrections")
+    global abbreviations_map_global, synonym_expansion_map_global
 
     abbreviations_map_global = load_abbreviations_map(TEXT_PROCESSING_PATH)
     logger.info(f"Loaded {len(abbreviations_map_global)} abbreviations")
