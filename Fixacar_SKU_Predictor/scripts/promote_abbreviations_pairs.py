@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Promote vetted (Word, Abbr. 1) pairs from NewAbbreviations2 to Abbreviations.
+Promote vetted (Word, Abbr. 1) pairs from NewAbbreviations to Abbreviations.
 
-- Reads Text_Processing_Rules.xlsx -> NewAbbreviations2
+- Reads Text_Processing_Rules.xlsx -> NewAbbreviations
 - For each row where Approve? in {Y, y, Yes, YES, yes} and Abbr. 1 not empty:
   - If Word is empty, the row is skipped (expert should fill Word)
   - Adds the abbreviation under that Word in Abbreviations (next empty Abbr.* column)
   - Deduplicates if the abbreviation already exists for that word
-- For Approve? in {N, n, No, NO, no}, move to NewAbbreviations2_Rejects (persistent do-not-suggest list)
-- Appends the promoted rows to NewAbbreviations2_History with timestamp
-- Deletes processed rows from NewAbbreviations2
+- For Approve? in {N, n, No, NO, no}, move to NewAbbreviations_Rejects (persistent do-not-suggest list)
+- Appends the promoted rows to NewAbbreviations_History with timestamp
+- Deletes processed rows from NewAbbreviations
 
 Run:
   python Fixacar_SKU_Predictor/scripts/promote_abbreviations_pairs.py
@@ -72,8 +72,8 @@ def promote():
         raise SystemExit(f"Rules file not found: {XLSX}")
 
     wb = openpyxl.load_workbook(XLSX)
-    sh_new = ensure_sheet(wb, 'NewAbbreviations2')
-    sh_hist = ensure_sheet(wb, 'NewAbbreviations2_History')
+    sh_new = ensure_sheet(wb, 'NewAbbreviations')
+    sh_hist = ensure_sheet(wb, 'NewAbbreviations_History')
     sh_abbr = ensure_sheet(wb, 'Abbreviations')
 
     # Ensure history and rejects headers
@@ -81,7 +81,7 @@ def promote():
         for c in range(1, sh_new.max_column + 1):
             sh_hist.cell(1, c, sh_new.cell(1, c).value)
         sh_hist.cell(1, sh_new.max_column + 1, 'Promoted_At')
-    sh_rej = ensure_sheet(wb, 'NewAbbreviations2_Rejects')
+    sh_rej = ensure_sheet(wb, 'NewAbbreviations_Rejects')
     if sh_rej.max_row == 1:
         sh_rej.cell(1, 1, 'Word')
         sh_rej.cell(1, 2, 'Abbr. 1')
@@ -96,7 +96,7 @@ def promote():
     col_abbr = headers.get('abbr. 1', 2)
     col_approve = headers.get('approve?')
     if not col_approve:
-        raise SystemExit("NewAbbreviations2 sheet is missing 'Approve?' column.")
+        raise SystemExit("NewAbbreviations sheet is missing 'Approve?' column.")
 
     promoted_rows: List[int] = []
     rejected_rows: List[int] = []
@@ -140,7 +140,7 @@ def promote():
             for c in range(1, sh_new.max_column + 1):
                 sh_hist.cell(dest_row, c, sh_new.cell(r, c).value)
             sh_hist.cell(dest_row, sh_new.max_column + 1, timestamp)
-    # Delete both promoted and rejected rows from NewAbbreviations2
+    # Delete both promoted and rejected rows from NewAbbreviations
     for r in sorted(set(promoted_rows + rejected_rows), reverse=True):
         sh_new.delete_rows(r, 1)
 

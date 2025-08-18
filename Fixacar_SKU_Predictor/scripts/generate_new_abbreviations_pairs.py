@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
 Generate abbreviation pairs (Word, Abbr. 1) and write into
-Text_Processing_Rules.xlsx sheet 'NewAbbreviations2'.
+Text_Processing_Rules.xlsx sheet 'NewAbbreviations'.
 
 Differences vs generate_new_abbreviations.py:
 - One row per (word, abbreviation) pair (words may repeat across rows)
 - Columns: Word | Abbr. 1 | Normalized_descripcion | frequency | Normalized_descripcion02 | frequency02 | Approve?
-- Dedups against existing pairs in Abbreviations and NewAbbreviations2
+- Dedups against existing pairs in Abbreviations and NewAbbreviations
 - If the word cannot be confidently inferred, Word is left blank (abbreviation is still proposed)
 - Sheet is cleared on each run to regenerate fresh suggestions (no append)
-- Respects NewAbbreviations2_Rejects for exclusions
+- Respects NewAbbreviations_Rejects for exclusions
 
 Run:
   python Fixacar_SKU_Predictor/scripts/generate_new_abbreviations_pairs.py
@@ -89,7 +89,7 @@ def read_all_tokens() -> Tuple[Counter, Dict[str, Counter], Dict[str, Counter], 
 
 
 def read_existing_pairs(wb) -> Tuple[Set[Tuple[str, str]], Dict[str, Set[str]]]:
-    """Collect existing (word, abbr) pairs from Abbreviations and NewAbbreviations2.
+    """Collect existing (word, abbr) pairs from Abbreviations and NewAbbreviations.
     Returns:
       existing_pairs: set of (word_or_blank, abbr)
       abbr_by_word: word -> set(abbr)
@@ -112,9 +112,9 @@ def read_existing_pairs(wb) -> Tuple[Set[Tuple[str, str]], Dict[str, Set[str]]]:
                     abbr_by_word[word].add(abbr)
                 c += 1
 
-    # NewAbbreviations2 sheet
-    if 'NewAbbreviations2' in wb.sheetnames:
-        sh = wb['NewAbbreviations2']
+    # NewAbbreviations sheet
+    if 'NewAbbreviations' in wb.sheetnames:
+        sh = wb['NewAbbreviations']
         for r in range(2, sh.max_row + 1):
             word = (sh.cell(r, 1).value or '').strip().lower()
             abbr = (sh.cell(r, 2).value or '').strip().lower()
@@ -127,8 +127,8 @@ def read_existing_pairs(wb) -> Tuple[Set[Tuple[str, str]], Dict[str, Set[str]]]:
 
 
 def load_or_create_new_sheet(wb):
-    if 'NewAbbreviations2' not in wb.sheetnames:
-        sh = wb.create_sheet('NewAbbreviations2')
+    if 'NewAbbreviations' not in wb.sheetnames:
+        sh = wb.create_sheet('NewAbbreviations')
         sh.cell(1, 1, 'Word')
         sh.cell(1, 2, 'Abbr. 1')
         sh.cell(1, 3, 'Normalized_descripcion')
@@ -137,7 +137,7 @@ def load_or_create_new_sheet(wb):
         sh.cell(1, 6, 'frequency02')
         sh.cell(1, 7, 'Approve?')
     else:
-        sh = wb['NewAbbreviations2']
+        sh = wb['NewAbbreviations']
         # Ensure headers exist
         headers = { (sh.cell(1, c).value or '').strip().lower(): c for c in range(1, sh.max_column + 1) }
         if 'word' not in headers: sh.cell(1, 1, 'Word')
@@ -230,8 +230,8 @@ def main():
 
     # Collect rejects to exclude
     rejects_set: Set[Tuple[str, str]] = set()
-    if 'NewAbbreviations2_Rejects' in wb.sheetnames:
-        sh_rej = wb['NewAbbreviations2_Rejects']
+    if 'NewAbbreviations_Rejects' in wb.sheetnames:
+        sh_rej = wb['NewAbbreviations_Rejects']
         for r in range(2, sh_rej.max_row + 1):
             w = (sh_rej.cell(r, 1).value or '').strip().lower()
             a = (sh_rej.cell(r, 2).value or '').strip().lower()
@@ -280,7 +280,7 @@ def main():
         sh.cell(r, 7, '')  # Approve?
 
     wb.save(XLSX)
-    print(f"NewAbbreviations2 regenerated in {XLSX}. Rows: {len(rows)}")
+    print(f"NewAbbreviations regenerated in {XLSX}. Rows: {len(rows)}")
 
 
 if __name__ == '__main__':
