@@ -23,11 +23,11 @@ if errorlevel 1 (
   exit /b 1
 )
 
-REM Stream output live to console AND save to log via PowerShell Tee-Object
-powershell -NoProfile -ExecutionPolicy Bypass -Command "py -3.11 scripts\01_sync_consolidado.py --download %* 2^>^&1 ^| Tee-Object -FilePath '%LOGFILE%'"
+REM Run and show live output in console (progress is printed by the script)
+py -3.11 scripts\01_sync_consolidado.py --download %*
 set "ERR=%ERRORLEVEL%"
 if not "%ERR%"=="0" (
-  echo [ERROR] Sync failed. See log above.
+  echo [ERROR] Sync failed. See messages above.
   pause
   popd
   exit /b %ERR%
