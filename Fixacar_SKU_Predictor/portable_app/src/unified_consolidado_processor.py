@@ -710,6 +710,46 @@ def build_vin_prefix_frequencies(conn: sqlite3.Connection) -> int:
     conn.create_function("is_valid_vin", 1, _is_valid_vin)
 
     # Rebuild table
+    # Build VIN prefix frequency table
+    cur.execute('DROP TABLE IF EXISTS vin_prefix_frequencies')
+    cur.execute(
+        '''
+        CREATE TABLE vin_prefix_frequencies (
+            vin_mask TEXT,
+            maker TEXT,
+            model INTEGER,
+            series TEXT,
+            frequency INTEGER,
+            PRIMARY KEY (vin_mask, maker, model, series)
+        )
+        '''
+    )
+
+    cur.execute(
+        '''
+        INSERT OR REPLACE INTO vin_prefix_frequencies (vin_mask, maker, model, series, frequency)
+        SELECT SUBSTR(UPPER(vin_number), 1, 11) || 'XXXXXX' AS vin_mask,
+               maker, model, series,
+               COUNT(DISTINCT UPPER(vin_number)) AS frequency
+        FROM processed_consolidado
+        WHERE vin_number IS NOT NULL
+          AND maker IS NOT NULL AND model IS NOT NULL AND series IS NOT NULL
+          AND is_valid_vin(vin_number)
+        GROUP BY vin_mask, maker, model, series
+        '''
+    )
+
+    # Index for lookup performance
+    cur.execute('CREATE INDEX idx_vin_mask_lookup ON vin_prefix_frequencies (vin_mask, maker, model, series)')
+    conn.commit()
+
+    cur.execute('SELECT COUNT(*) FROM vin_prefix_frequencies')
+    row = cur.fetchone()
+    try:
+        return int(row[0]) if row and row[0] is not None else 0
+    except Exception:
+        return 0
+
 
 
 def write_metadata(conn: sqlite3.Connection, extra: dict):
