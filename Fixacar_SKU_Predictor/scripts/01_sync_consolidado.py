@@ -43,7 +43,6 @@ SRC.mkdir(parents=True, exist_ok=True)
 REQUIRED = [
     SRC / "consolidado.json",
     SRC / "Text_Processing_Rules.xlsx",
-    SRC / "Maestro.xlsx",
 ]
 
 
