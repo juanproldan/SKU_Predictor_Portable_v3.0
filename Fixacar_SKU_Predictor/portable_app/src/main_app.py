@@ -678,13 +678,13 @@ class FixacarApp:
         # Deprecated pandas path removed; handled directly in save_user_correction using openpyxl
         return None
 
-    def open_correction_dialog(self, original_desc: str, display_desc: str):
+    # def open_correction_dialog(self, original_desc: str, display_desc: str):
         """
         Open a dialog for the user to correct the text processing result.
         This enables the learning mechanism for text processing.
         """
         # Create correction dialog window
-        dialog = tk.Toplevel(self.root)
+        # dialog removed
         dialog.title("Correct Description")
         dialog.geometry("500x300")
         dialog.transient(self.root)
@@ -759,24 +759,15 @@ class FixacarApp:
                     f"'{display_desc}' → '{corrected_text}'\n\n"
                     f"Search results have been updated."
                 )
-            dialog.destroy()
+            pass  # dialog removed
 
         def cancel_correction():
-            dialog.destroy()
+            pass  # dialog removed
 
         # Cancel button
-        cancel_btn = ttk.Button(buttons_frame, text="Cancel", command=cancel_correction)
-        cancel_btn.pack(side="right", padx=(5, 0))
+        # Correction dialog removed
 
-        # Save button
-        save_btn = ttk.Button(buttons_frame, text="Save Correction", command=save_correction)
-        save_btn.pack(side="right")
-
-        # Bind Enter key to save
-        dialog.bind('<Return>', lambda e: save_correction())
-        dialog.bind('<Escape>', lambda e: cancel_correction())
-
-    def _rerun_sku_search_after_correction(self):
+    # def _rerun_sku_search_after_correction(self):
         """
         Re-run SKU search after text correction without clearing VIN details.
         This preserves the existing vehicle details and only updates SKU predictions.
@@ -2338,15 +2329,7 @@ class FixacarApp:
                 )
                 desc_label.grid(row=0, column=0, sticky="w")
 
-                # Pencil icon button for corrections
-                pencil_button = ttk.Button(
-                    header_frame,
-                    text="✏️",
-                    width=3,
-                    command=lambda desc=original_desc, display=display_desc: self.open_correction_dialog(desc, display)
-                )
-                pencil_button.grid(row=0, column=1, sticky="e", padx=(5, 0))
-
+                # Correction UI removed per requirements (pencil and dialog disabled)
                 # Add separator
                 ttk.Separator(part_frame, orient='horizontal').pack(fill='x', pady=5)
 
