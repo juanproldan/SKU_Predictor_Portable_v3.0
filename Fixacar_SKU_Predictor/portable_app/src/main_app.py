@@ -2338,15 +2338,7 @@ class FixacarApp:
                 )
                 desc_label.grid(row=0, column=0, sticky="w")
 
-                # Pencil icon button for corrections
-                pencil_button = ttk.Button(
-                    header_frame,
-                    text="✏️",
-                    width=3,
-                    command=lambda desc=original_desc, display=display_desc: self.open_correction_dialog(desc, display)
-                )
-                pencil_button.grid(row=0, column=1, sticky="e", padx=(5, 0))
-
+                # Correction UI removed per requirements (pencil and dialog disabled)
                 # Add separator
                 ttk.Separator(part_frame, orient='horizontal').pack(fill='x', pady=5)
 

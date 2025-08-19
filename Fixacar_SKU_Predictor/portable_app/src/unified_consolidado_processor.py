@@ -243,12 +243,16 @@ def setup_database(db_path):
             descripcion TEXT,                   -- Original description from consolidado.json (may be NULL)
             normalized_descripcion TEXT,        -- Normalized description for SKU training (may be NULL)
             referencia TEXT,                    -- For SKU training (may be NULL)
+            valor REAL,                         -- Original price/value if present
+            aprobado INTEGER,                   -- Approval flag if present (1/0)
+            date TEXT,                          -- Original date/time if present
             UNIQUE(vin_number, descripcion, referencia) -- Prevent duplicates
         )
         ''')
 
         # Drop existing year range tables if they exist (for clean rebuild)
         cursor.execute('DROP TABLE IF EXISTS sku_year_ranges')
+        cursor.execute('DROP TABLE IF EXISTS sku_year_ranges_Aprobado')
 
         # Create aggregated year range tables for improved frequency counting
         cursor.execute('''
@@ -262,6 +266,21 @@ def setup_database(db_path):
             end_year INTEGER,
             frequency INTEGER,
             global_sku_frequency INTEGER,  -- How many times this SKU appears in entire consolidado
+            PRIMARY KEY (maker, series, descripcion, referencia)
+        )
+        ''')
+
+        cursor.execute('''
+        CREATE TABLE sku_year_ranges_Aprobado (
+            maker TEXT,
+            series TEXT,
+            descripcion TEXT,
+            normalized_descripcion TEXT,
+            referencia TEXT,
+            start_year INTEGER,
+            end_year INTEGER,
+            frequency INTEGER,
+            global_sku_frequency INTEGER,
             PRIMARY KEY (maker, series, descripcion, referencia)
         )
         ''')
@@ -283,6 +302,8 @@ def setup_database(db_path):
         # Create indexes for year range tables
         cursor.execute('CREATE INDEX idx_sku_year_range_lookup ON sku_year_ranges (maker, series, start_year, end_year)')
         cursor.execute('CREATE INDEX idx_sku_frequency ON sku_year_ranges (frequency DESC)')
+        cursor.execute('CREATE INDEX idx_sku_year_range_lookup_aprob ON sku_year_ranges_Aprobado (maker, series, start_year, end_year)')
+        cursor.execute('CREATE INDEX idx_sku_frequency_aprob ON sku_year_ranges_Aprobado (frequency DESC)')
 
         conn.commit()
         logger.info("Fresh database and 'processed_consolidado' table created successfully.")
@@ -591,7 +612,7 @@ def aggregate_sku_year_ranges(conn):
     1. Groups SKU records by (maker, series, descripcion, referencia)
     2. Detects year ranges for each group
     3. Calculates total frequency across the year range
-    4. Inserts aggregated data into sku_year_ranges table
+    4. Inserts aggregated data into sku_year_ranges table and sku_year_ranges_Aprobado (aprobado=1 only)
     """
     logger = logging.getLogger(__name__)
     logger.info("🔄 Aggregating SKU data into year ranges...")
@@ -629,6 +650,25 @@ def aggregate_sku_year_ranges(conn):
     """)
 
     raw_data = cursor.fetchall()
+
+    # Repeat the query for aprobado=1 subset
+    cursor.execute("""
+        SELECT maker, series, descripcion, normalized_descripcion, referencia, model, COUNT(*) as frequency
+        FROM processed_consolidado
+        WHERE referencia IS NOT NULL
+        AND referencia != ''
+        AND referencia != 'None'
+        AND referencia != 'UNKNOWN'
+        AND maker IS NOT NULL
+        AND series IS NOT NULL
+        AND model IS NOT NULL
+        AND aprobado = 1
+        GROUP BY maker, series, descripcion, normalized_descripcion, referencia, model
+        ORDER BY maker, series, referencia, model
+    """)
+    raw_data_aprobado = cursor.fetchall()
+
+    raw_data = cursor.fetchall()
     logger.info(f"📊 Processing {len(raw_data):,} individual year records for SKU aggregation")
 
     # Group by (maker, series, descripcion, referencia) and collect years
@@ -644,7 +684,18 @@ def aggregate_sku_year_ranges(conn):
         sku_groups[key]['years'].extend([year] * frequency)
         sku_groups[key]['total_frequency'] += frequency
 
-    logger.info(f"📈 Grouped into {len(sku_groups):,} unique SKU combinations")
+    # Build aprobado=1 groups
+    sku_groups_aprob = {}
+    for row in raw_data_aprobado:
+        maker, series, descripcion, normalized_descripcion, referencia, year, frequency = row
+        key = (maker, series, descripcion, normalized_descripcion, referencia)
+        if key not in sku_groups_aprob:
+            sku_groups_aprob[key] = {'years': [], 'total_frequency': 0}
+        sku_groups_aprob[key]['years'].extend([year] * frequency)
+        sku_groups_aprob[key]['total_frequency'] += frequency
+
+    logger.info(f"📈 Grouped into {len(sku_groups):,} unique SKU combinations (all)")
+    logger.info(f"📈 Grouped into {len(sku_groups_aprob):,} unique SKU combinations (aprobado=1)")
 
     # Process each group and insert year ranges
     aggregated_count = 0
@@ -668,8 +719,25 @@ def aggregate_sku_year_ranges(conn):
             except Exception as e:
                 logger.warning(f"Error inserting SKU year range: {e}")
 
+    # Insert aprobado=1 groups
+    for (maker, series, descripcion, normalized_descripcion, referencia), data in sku_groups_aprob.items():
+        years = data['years']
+        total_frequency = data['total_frequency']
+        start_year, end_year = detect_year_ranges(years)
+        if start_year is not None and end_year is not None:
+            try:
+                global_freq = global_sku_frequencies.get(referencia, 0)
+                cursor.execute("""
+                    INSERT OR REPLACE INTO sku_year_ranges_Aprobado
+                    (maker, series, descripcion, normalized_descripcion, referencia, start_year, end_year, frequency, global_sku_frequency)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (maker, series, descripcion, normalized_descripcion, referencia, start_year, end_year, total_frequency, global_freq))
+            except Exception as e:
+                logger.warning(f"Error inserting SKU year range (Aprobado): {e}")
+
     conn.commit()
-    logger.info(f"✅ Created {aggregated_count:,} SKU year range records")
+    logger.info(f"✅ Created {aggregated_count:,} SKU year range records (all)")
+    logger.info(f"✅ Created {len(sku_groups_aprob):,} SKU year range groups (Aprobado=1)")
 
     return aggregated_count
 
@@ -829,6 +897,10 @@ def process_consolidado_record(record, series_map=None):
     series = record.get('series')
     description = record.get('item_original_descripcion')
     referencia = record.get('item_referencia')
+    # Optional fields to preserve
+    valor = record.get('item_valor') if 'item_valor' in record else (record.get('valor') if 'valor' in record else None)
+    aprobado = record.get('aprobado') if 'aprobado' in record else (record.get('Aprobado') if 'Aprobado' in record else None)
+    date_str = record.get('date') if 'date' in record else (record.get('Date') if 'Date' in record else None)
 
     # Clean VIN if present (but don't discard record if invalid)
     cleaned_vin = clean_vin_for_training(vin) if vin else None
@@ -839,6 +911,21 @@ def process_consolidado_record(record, series_map=None):
     series = str(series).strip().lower() if series else None
     description = str(description).strip().lower() if description else None
     referencia = str(referencia).strip() if referencia and str(referencia).strip() else None
+    # Optional preserved fields
+    try:
+        valor = float(str(valor).replace(',', '.')) if valor not in (None, '') else None
+    except Exception:
+        valor = None
+    try:
+        aprobado = int(aprobado) if aprobado not in (None, '') else None
+    except Exception:
+        aprobado = None
+    date_clean = None
+    if date_str not in (None, ''):
+        try:
+            date_clean = str(date_str).strip()
+        except Exception:
+            date_clean = None
 
     # Apply series normalization during preprocessing (hybrid approach - Phase 1)
     if series and series_map:
@@ -871,7 +958,10 @@ def process_consolidado_record(record, series_map=None):
         'series': series,
         'descripcion': descripcion,
         'normalized_descripcion': normalized_descripcion,
-        'referencia': referencia
+        'referencia': referencia,
+        'valor': valor,
+        'aprobado': aprobado,
+        'date': date_clean
     }
 
 def process_consolidado_to_db(conn, consolidado_path, series_map=None):
@@ -984,7 +1074,10 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                     'model': model,
                     'series': series,
                     'item_original_descripcion': item.get('descripcion'),  # Field is 'descripcion'
-                    'item_referencia': item.get('referencia')  # Field is 'referencia'
+                    'item_referencia': item.get('referencia'),  # Field is 'referencia'
+                    'item_valor': item.get('Valor') if 'Valor' in item else item.get('valor'),
+                    'aprobado': item.get('Aprobado') if 'Aprobado' in item else item.get('aprobado'),
+                    'date': item.get('Date') if 'Date' in item else item.get('date')
                 }
 
                 # Process the combined record
@@ -1018,8 +1111,9 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                     cursor.execute('''
                     INSERT INTO processed_consolidado (
                         vin_number, maker, model, series,
-                        descripcion, normalized_descripcion, referencia
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        descripcion, normalized_descripcion, referencia,
+                        valor, aprobado, date
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         processed_record['vin_number'],
                         processed_record['maker'],
@@ -1027,7 +1121,10 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                         processed_record['series'],
                         processed_record['descripcion'],
                         processed_record['normalized_descripcion'],
-                        processed_record['referencia']
+                        processed_record['referencia'],
+                        processed_record.get('valor'),
+                        processed_record.get('aprobado'),
+                        processed_record.get('date')
                     ))
                     stats['inserted_records'] += 1
 
