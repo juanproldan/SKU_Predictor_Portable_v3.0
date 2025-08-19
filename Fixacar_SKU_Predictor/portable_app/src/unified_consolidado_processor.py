@@ -900,7 +900,8 @@ def process_consolidado_record(record, series_map=None):
     # Optional fields to preserve
     valor = record.get('item_valor') if 'item_valor' in record else (record.get('valor') if 'valor' in record else None)
     aprobado = record.get('aprobado') if 'aprobado' in record else (record.get('Aprobado') if 'Aprobado' in record else None)
-    date_str = record.get('date') if 'date' in record else (record.get('Date') if 'Date' in record else None)
+    date_str = (record.get('date') or record.get('Date') or record.get('record_date') or
+                 record.get('Fecha') or record.get('fecha'))
 
     # Clean VIN if present (but don't discard record if invalid)
     cleaned_vin = clean_vin_for_training(vin) if vin else None
@@ -1077,7 +1078,8 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                     'item_referencia': item.get('referencia'),  # Field is 'referencia'
                     'item_valor': item.get('Valor') if 'Valor' in item else item.get('valor'),
                     'aprobado': item.get('Aprobado') if 'Aprobado' in item else item.get('aprobado'),
-                    'date': item.get('Date') if 'Date' in item else item.get('date')
+                    'date': item.get('Date') if 'Date' in item else item.get('date'),
+                    'record_date': (record.get('Date') if 'Date' in record else (record.get('date') if 'date' in record else (record.get('Fecha') if 'Fecha' in record else record.get('fecha'))))
                 }
 
                 # Process the combined record
