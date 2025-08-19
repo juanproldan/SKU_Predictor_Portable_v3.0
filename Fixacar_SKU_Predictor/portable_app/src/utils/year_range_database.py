@@ -108,7 +108,9 @@ class YearRangeDatabaseOptimizer:
                     'global_frequency': global_freq,
                     'confidence': confidence,
                     'source': f"DB({frequency}/{global_freq})",
-                    'year_range': f"{start_year}-{end_year}"
+                    'year_range': f"{start_year}-{end_year}",
+                    'start_year': start_year,
+                    'end_year': end_year
                 })
 
                 self.logger.debug(f"Year range exact match: {referencia} (freq: {frequency}, global: {global_freq}, range: {start_year}-{end_year})")
@@ -146,7 +148,9 @@ class YearRangeDatabaseOptimizer:
                         'global_frequency': global_freq,
                         'confidence': confidence,
                         'source': f"DB({frequency}/{global_freq})",
-                        'year_range': f"{start_year}-{end_year}"
+                        'year_range': f"{start_year}-{end_year}",
+                        'start_year': start_year,
+                        'end_year': end_year
                     })
                 if like_results:
                     self.logger.debug(f"Series LIKE fallback returned {len(like_results)} rows for maker={maker}, series~={series}, year={model}")
@@ -178,7 +182,9 @@ class YearRangeDatabaseOptimizer:
                         'global_frequency': global_freq,
                         'confidence': confidence,
                         'source': f"DB({frequency}/{global_freq})",
-                        'year_range': f"{start_year}-{end_year}"
+                        'year_range': f"{start_year}-{end_year}",
+                        'start_year': start_year,
+                        'end_year': end_year
                     })
                 if broad_results:
                     self.logger.debug(

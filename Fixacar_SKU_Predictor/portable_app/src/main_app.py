@@ -2113,6 +2113,15 @@ class FixacarApp:
                         if not year_range_predictions:
                             print(f"    ❌ No year range matches found")
 
+                        # Early-stop: if we already have 2 strong suggestions and remaining predictions have lower confidence, we can stop adding
+                        if len(suggestions) >= 2:
+                            # Find current top-2 min confidence
+                            try:
+                                top2 = sorted((info.get('confidence', 0.0) for info in suggestions.values()), reverse=True)[:2]
+                                min_top2 = top2[-1] if top2 else 0.0
+                            except Exception:
+                                min_top2 = 0.0
+
                     except Exception as e:
                         print(f"    ⚠️ Year range optimization error: {e}")
                 # --- End Year Range Database Optimization ---
