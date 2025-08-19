@@ -538,6 +538,35 @@ class FixacarApp:
         This is used as a fallback when VIN prediction fails.
 
         Args:
+    def _infer_series_from_vin_mask(self, maker: str, vin: str) -> str | None:
+        """Infer most common series using 11-char VIN mask within same maker.
+        Returns best series or None if not found.
+        """
+        try:
+            v = (vin or '').strip().upper()
+            if len(v) != 17:
+                return None
+            vin_mask = v[:11] + 'XXXXXX'
+            con = sqlite3.connect(DEFAULT_DB_PATH)
+            cur = con.cursor()
+            cur.execute(
+                '''
+                SELECT series, SUM(frequency) as f
+                FROM vin_prefix_frequencies
+                WHERE vin_mask=? AND maker=?
+                GROUP BY series
+                ORDER BY f DESC
+                LIMIT 1
+                ''', (vin_mask, maker.lower())
+            )
+            row = cur.fetchone()
+            con.close()
+            if row and row[0]:
+                return row[0]
+        except Exception as e:
+            print(f"VIN mask series inference error: {e}")
+        return None
+
             wmi: World Manufacturer Identifier (first 3 characters of VIN)
             maker: Vehicle manufacturer name
 
@@ -1701,6 +1730,7 @@ class FixacarApp:
 
         else:
             # Multiple sources - consensus bonus
+
             has_maestro = any("Maestro" in source for source in sources)
             has_nn = any("SKU-NN" in source or "NN" in source for source in sources)
             has_db = any("DB" in source for source in sources)
@@ -1740,14 +1770,12 @@ class FixacarApp:
                 if False:
                     print(f"  ✅ User correction applied: '{original_desc}' → '{corrected_desc}'")
 
-                # STEP 2: Normalize the corrected description (without synonym expansion)
+                # STEP 2–3: Precompute and reuse normalized forms
                 normalized_original = self.unified_text_preprocessing(corrected_desc)
-                print(f"  Normalized original: '{normalized_original}'")
-
-                # STEP 3: Apply synonym expansion for fallback searches (use corrected description)
                 expanded_desc = self.expand_synonyms(corrected_desc)
-                print(f"  After synonym expansion: '{expanded_desc}'")
                 normalized_expanded = self.unified_text_preprocessing(expanded_desc)
+                print(f"  Normalized original: '{normalized_original}'")
+                print(f"  After synonym expansion: '{expanded_desc}'")
                 print(f"  Normalized expanded: '{normalized_expanded}'")
 
                 # STEP 4: Create abbreviated version to match database format
@@ -1834,6 +1862,11 @@ class FixacarApp:
                     'RENAULT': 'Renault',
                     'CHEVROLET': 'Chevrolet',
                     'MAZDA': 'Mazda',
+                # Precompute normalized forms once
+                normalized_original = self.unified_text_preprocessing(corrected_desc)
+                expanded_desc = self.expand_synonyms(corrected_desc)
+                normalized_expanded = self.unified_text_preprocessing(expanded_desc)
+
                     'FORD': 'Ford',
                     'HYUNDAI': 'Hyundai',
                     'TOYOTA': 'Toyota',
@@ -1920,10 +1953,10 @@ class FixacarApp:
                         maestro_matches_found += 1
 
                     if make_match and year_match and series_match:
-                        # Apply unified preprocessing for exact description matching
+                        # Apply unified preprocessing once (avoid recomputation)
                         preprocessed_maestro_desc = self.unified_text_preprocessing(maestro_desc)
-                        preprocessed_original = self.unified_text_preprocessing(original_desc)
-                        preprocessed_expanded = self.unified_text_preprocessing(expanded_desc)
+                        preprocessed_original = normalized_original  # already preprocessed above
+                        preprocessed_expanded = normalized_expanded  # already preprocessed above
 
                         # Check for exact description match after unified preprocessing
                         desc_match_orig = preprocessed_maestro_desc == preprocessed_original
@@ -1989,8 +2022,8 @@ class FixacarApp:
                         if make_match and year_match:
                             # Apply unified preprocessing for description matching
                             preprocessed_maestro_desc = self.unified_text_preprocessing(maestro_desc)
-                            preprocessed_original = self.unified_text_preprocessing(original_desc)
-                            preprocessed_expanded = self.unified_text_preprocessing(expanded_desc)
+                            preprocessed_original = normalized_original
+                            preprocessed_expanded = normalized_expanded
 
                             # Check for exact description match after unified preprocessing
                             desc_match_orig = preprocessed_maestro_desc == preprocessed_original
@@ -2011,6 +2044,13 @@ class FixacarApp:
                     # Process fallback matches with lower confidence (since series wasn't matched)
                     if fallback_matches:
                         print(f"  ✅ Found {len(fallback_matches)} Maestro fallback matches (Make + Year + Description)")
+
+                        # If series unknown from VIN model, try inferring by VIN mask within maker
+                        if (not series or series.upper() in {'N/A', 'UNKNOWN (VDS/WMI)'}):
+                            inferred_series = self._infer_series_from_vin_mask(maker, vin)
+                            if inferred_series:
+                                series = inferred_series
+                                print(f"    🔎 Series inferred from VIN mask: {series}")
 
                         # Count frequency of each SKU
                         sku_frequency = {}
