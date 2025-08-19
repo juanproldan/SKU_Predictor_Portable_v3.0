@@ -138,6 +138,11 @@ def _load_noun_gender_map() -> Dict[str, str]:
             m[noun] = 'f'
     return m
 
+# Precompile common regexes once
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_DOTS_SLASH_RE = re.compile(r"[./]")
+
+
 
 # =====================
 # Text normalization
@@ -149,7 +154,7 @@ def _strip_accents(s: str) -> str:
 
 
 def _basic_tokenize(s: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", s.lower())
+    return _TOKEN_RE.findall(s.lower())
 
 
 _common_gender_pairs = {
@@ -189,7 +194,7 @@ def _expand_abbreviations(text: str) -> str:
     if not _abbrev_map_cache:
         return text
     # Normalize common separator patterns before tokenizing: treat dot-separated chains as separate tokens
-    t = text.replace('.', ' ').replace('/', ' ')
+    t = _DOTS_SLASH_RE.sub(' ', text)
     tokens = _basic_tokenize(t)
     expanded = [(_abbrev_map_cache.get(tok, tok)) for tok in tokens]
     return ' '.join(expanded)

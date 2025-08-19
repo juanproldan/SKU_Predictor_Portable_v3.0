@@ -85,14 +85,14 @@ class YearRangeDatabaseOptimizer:
             cursor.execute("""
                 SELECT referencia, frequency, start_year, end_year, global_sku_frequency
                 FROM sku_year_ranges
-                WHERE LOWER(maker) = LOWER(?)
-                AND LOWER(series) = LOWER(?)
-                AND (LOWER(descripcion) = LOWER(?) OR LOWER(normalized_descripcion) = LOWER(?))
+                WHERE maker = ?
+                AND series = ?
+                AND (descripcion = ? OR normalized_descripcion = ?)
                 AND ? BETWEEN start_year AND end_year
                 AND referencia IS NOT NULL AND LENGTH(TRIM(referencia)) > 0
                 ORDER BY frequency DESC
                 LIMIT ?
-            """, (maker, series, description, description, model, limit))
+            """, (str(maker).lower(), str(series).lower(), str(description).lower(), str(description).lower(), model, limit))
 
             exact_results = cursor.fetchall()
 
@@ -128,9 +128,9 @@ class YearRangeDatabaseOptimizer:
                 cursor.execute("""
                     SELECT referencia, frequency, start_year, end_year, global_sku_frequency
                     FROM sku_year_ranges
-                    WHERE LOWER(maker) = LOWER(?)
-                    AND (LOWER(series) LIKE LOWER(?) OR LOWER(series) LIKE LOWER(?))
-                    AND (LOWER(descripcion) = LOWER(?) OR LOWER(normalized_descripcion) = LOWER(?))
+                    WHERE maker = ?
+                    AND (series LIKE ? OR series LIKE ?)
+                    AND (descripcion = ? OR normalized_descripcion = ?)
                     AND ? BETWEEN start_year AND end_year
                     AND referencia IS NOT NULL AND LENGTH(TRIM(referencia)) > 0
                     ORDER BY frequency DESC
@@ -160,8 +160,8 @@ class YearRangeDatabaseOptimizer:
                 cursor.execute("""
                     SELECT referencia, frequency, start_year, end_year, global_sku_frequency
                     FROM sku_year_ranges
-                    WHERE LOWER(maker) = LOWER(?)
-                    AND (LOWER(descripcion) = LOWER(?) OR LOWER(normalized_descripcion) = LOWER(?))
+                    WHERE maker = ?
+                    AND (descripcion = ? OR normalized_descripcion = ?)
                     AND ? BETWEEN start_year AND end_year
                     AND referencia IS NOT NULL AND LENGTH(TRIM(referencia)) > 0
                     ORDER BY frequency DESC
