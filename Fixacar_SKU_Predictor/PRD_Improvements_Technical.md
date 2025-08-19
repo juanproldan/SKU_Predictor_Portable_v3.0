@@ -84,10 +84,10 @@ Acceptance:
 ### 3.1 Probabilistic smoothing and back‑off
 - Let C(key) be frequency for (maker, series, normalized_descripcion, referencia) within valid years
 - Use Laplace smoothing: C′ = C + α (α≈0.5) and normalize to probabilities
-- Back‑off hierarchy when few counts or missing:
-  1) (maker, series, normalized_descripcion)
-  2) (maker, normalized_descripcion)
-  3) (normalized_descripcion)
+- Back‑off hierarchy when few counts or missing (aligned with client policy):
+  1) (maker, series, description) — description can be original or normalized, exact equality only
+  2) (maker, fuzzy‑series, description) — series LIKE fallback, exact description
+  3) (maker, description) — last‑resort, no series, exact description; still within year bounds
 - Combine with VIN prior: if VIN indicates a maker/series, multiply that branch by factor β (β≈1.2–1.5)
 
 ### 3.2 Tie‑breaking by similarity (pure SQLite option)
