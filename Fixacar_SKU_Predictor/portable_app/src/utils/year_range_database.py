@@ -25,17 +25,17 @@ import os
 class YearRangeDatabaseOptimizer:
     """
     Optimized database interface using year range aggregation for automotive parts prediction.
-    
+
     This class provides methods to query the new year range tables for improved
     frequency counting and more accurate automotive parts predictions.
     """
-    
+
     def __init__(self, db_path: str):
         """Initialize the year range database optimizer."""
         self.db_path = db_path
         self.logger = logging.getLogger(__name__)
         self._connection = None
-        
+
     def get_connection(self) -> sqlite3.Connection:
         """Get database connection with proper error handling."""
         if self._connection is None:
@@ -44,13 +44,13 @@ class YearRangeDatabaseOptimizer:
             self._connection = sqlite3.connect(self.db_path)
             self._connection.row_factory = sqlite3.Row
         return self._connection
-    
+
     def close(self):
         """Close database connection."""
         if self._connection:
             self._connection.close()
             self._connection = None
-    
+
     def get_sku_predictions_year_range(self, maker: str, model, series: str,
                                      description: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -79,7 +79,7 @@ class YearRangeDatabaseOptimizer:
             target_year = int(model) if model and str(model).isdigit() else None
         except (ValueError, TypeError):
             target_year = None
-        
+
         # Try exact description match first (highest confidence)
         try:
             cursor.execute("""
@@ -93,9 +93,9 @@ class YearRangeDatabaseOptimizer:
                 ORDER BY frequency DESC
                 LIMIT ?
             """, (maker, series, description, description, model, limit))
-            
+
             exact_results = cursor.fetchall()
-            
+
             for row in exact_results:
                 referencia, frequency, start_year, end_year, global_freq = row
 
@@ -112,10 +112,10 @@ class YearRangeDatabaseOptimizer:
                 })
 
                 self.logger.debug(f"Year range exact match: {referencia} (freq: {frequency}, global: {global_freq}, range: {start_year}-{end_year})")
-        
+
         except Exception as e:
             self.logger.error(f"Error in exact year range query: {e}")
-        
+
         # Description fuzzy matching is DISABLED per policy (parity with Step 2). Only exact description is allowed.
 
         # If still no matches, try series LIKE fallback (handles variants like 'sail (cs3)/ls')
@@ -153,22 +153,55 @@ class YearRangeDatabaseOptimizer:
             except Exception as e:
                 self.logger.error(f"Error in series LIKE fallback: {e}")
 
-        return predictions
-    
+        # If still no matches after series LIKE, try maker + description only (no series)
+        # This is a last-resort fallback and still respects year range bounds
+        if not predictions:
+            try:
+                cursor.execute("""
+                    SELECT referencia, frequency, start_year, end_year, global_sku_frequency
+                    FROM sku_year_ranges
+                    WHERE LOWER(maker) = LOWER(?)
+                    AND (LOWER(descripcion) = LOWER(?) OR LOWER(normalized_descripcion) = LOWER(?))
+                    AND ? BETWEEN start_year AND end_year
+                    AND referencia IS NOT NULL AND LENGTH(TRIM(referencia)) > 0
+                    ORDER BY frequency DESC
+                    LIMIT ?
+                """, (maker, description, description, model, limit))
+                broad_results = cursor.fetchall()
+                for row in broad_results:
+                    referencia, frequency, start_year, end_year, global_freq = row
+                    confidence = self._calculate_year_range_confidence(
+                        frequency, start_year, end_year, target_year, "fuzzy")
+                    predictions.append({
+                        'sku': referencia,
+                        'frequency': frequency,
+                        'global_frequency': global_freq,
+                        'confidence': confidence,
+                        'source': f"DB({frequency}/{global_freq})",
+                        'year_range': f"{start_year}-{end_year}"
+                    })
+                if broad_results:
+                    self.logger.debug(
+                        f"Maker+description fallback returned {len(broad_results)} rows for maker={maker}, year={model}")
+            except Exception as e:
+                self.logger.error(f"Error in maker+description fallback: {e}")
 
-    
+        return predictions
+
+
+
     def _calculate_year_range_confidence(self, frequency: int, start_year: int, end_year: int,
                                        target_year, match_type: str) -> float:
         """
         Calculate confidence score based on frequency, year range, and match type.
-        
+
         Args:
             frequency: Total frequency across the year range
             start_year: Start of the year range
             end_year: End of the year range
             target_year: The year being searched for
             match_type: Type of match (exact, fuzzy, vin)
-            
+
         Returns:
             Confidence score between 0.0 and 1.0
         """
@@ -183,16 +216,16 @@ class YearRangeDatabaseOptimizer:
             base_confidence = 0.6
         else:
             base_confidence = 0.5
-        
+
         # Adjust based on match type
         match_multipliers = {
             'exact': 1.0,
             'fuzzy': 0.85,
             'vin': 0.9
         }
-        
+
         confidence = base_confidence * match_multipliers.get(match_type, 0.8)
-        
+
         # Bonus for year ranges that include the target year in the middle (more reliable)
         # Only apply if target_year is valid
         if target_year is not None and start_year is not None and end_year is not None:
@@ -208,29 +241,29 @@ class YearRangeDatabaseOptimizer:
             except (TypeError, ZeroDivisionError):
                 # If year calculations fail, just use base confidence
                 pass
-        
+
         # Cap at 1.0
         return min(confidence, 1.0)
-    
+
     def get_year_range_statistics(self) -> Dict[str, Any]:
         """Get statistics about the year range optimization."""
         conn = self.get_connection()
         cursor = conn.cursor()
-        
+
         stats = {}
-        
+
         try:
             # SKU year range statistics
             cursor.execute("SELECT COUNT(*) FROM sku_year_ranges")
             stats['sku_year_ranges'] = cursor.fetchone()[0]
-            
+
             cursor.execute("SELECT AVG(frequency) FROM sku_year_ranges")
             stats['avg_sku_frequency'] = cursor.fetchone()[0] or 0
-            
+
             cursor.execute("SELECT AVG(end_year - start_year + 1) FROM sku_year_ranges")
             stats['avg_sku_year_span'] = cursor.fetchone()[0] or 0
-            
+
         except Exception as e:
             self.logger.error(f"Error getting year range statistics: {e}")
-        
+
         return stats

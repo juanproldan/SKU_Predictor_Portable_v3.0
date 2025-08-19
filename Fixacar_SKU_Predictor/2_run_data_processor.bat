@@ -37,20 +37,20 @@ if not "%ERR%"=="0" (
 
 echo.
 echo ========================================
-echo POST-PROCESS: Generate NewAbbreviations2 suggestions
+echo POST-PROCESS: Generate NewAbbreviations suggestions
 
 echo Running generator: scripts\generate_new_abbreviations_pairs.py
 py -3.11 scripts\generate_new_abbreviations_pairs.py > "%LOG_ABBR%" 2>&1
 set "ERR_ABBR=%ERRORLEVEL%"
 type "%LOG_ABBR%"
 if not "%ERR_ABBR%"=="0" (
-  echo [ERROR] NewAbbreviations2 generation failed. See log above.
+  echo [ERROR] NewAbbreviations generation failed. See log above.
   pause
   popd
   exit /b %ERR_ABBR%
 )
 
-echo [OK] Processing complete and NewAbbreviations2 regenerated.
+echo [OK] Processing complete and NewAbbreviations regenerated.
 pause
 popd
 exit /b 0

@@ -65,6 +65,8 @@ portable_app/data/processed_consolidado.db
 # Canonical Source_Files data to ignore in git (keep in workspace)
 Fixacar_SKU_Predictor/Source_Files/consolidado.json
 Fixacar_SKU_Predictor/Source_Files/processed_consolidado.db
+Fixacar_SKU_Predictor/Source_Files/processed_consolidado.db-wal
+Fixacar_SKU_Predictor/Source_Files/processed_consolidado.db-shm
 
 # Development artifacts (removed from client deployment)
 deployment_package/

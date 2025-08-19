@@ -29,13 +29,16 @@ This document is the single source of truth for the Fixacar SKU Predictor v3.0 p
   - Prevents 0-year and out-of-scope ranges in sku_year_ranges.
 - sku_year_ranges aggregates by (maker, series, descripcion, normalized_descripcion, referencia) and computes start_year = MIN(model), end_year = MAX(model) within the valid range.
 
+- Early year gating: records with model outside [year_start, current_year+2] are skipped before insertion (configurable via Source_Files/config.json).
+- VIN prefix and SKU aggregates rely on in-range data only by construction (no duplicate year filters needed downstream).
+
 ## 4. VIN Handling
 - VIN normalization only fixes characters (I→1, O/Q→0; uppercase).
 - Validation utilities exist, but strict VIN filtering is off per client instruction for Step 2. Records must not be dropped solely due to VIN.
 
 ## 5. Step 5 GUI (SKU Predictor)
 - Must behave like the legacy app; no new Excel exports from the predictor.
-- Maestro.xlsx is appended/updated as in legacy (no change in behavior).
+- Maestro entries are stored in the Maestro sheet inside Text_Processing_Rules.xlsx (no standalone Maestro.xlsx required).
 - Uses sku_year_ranges for frequency- and year-aware SKU prediction.
 
 ## 6. Text_Processing_Rules.xlsx

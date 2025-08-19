@@ -43,7 +43,6 @@ SRC.mkdir(parents=True, exist_ok=True)
 REQUIRED = [
     SRC / "consolidado.json",
     SRC / "Text_Processing_Rules.xlsx",
-    SRC / "Maestro.xlsx",
 ]
 
 
@@ -72,19 +71,48 @@ def load_config() -> Dict[str, str]:
 
 
 def download_file(url: str, target: Path) -> None:
+    """Download a file with visible progress and sensible timeouts.
+    Uses separate connect/read timeouts to avoid hanging indefinitely.
+    """
     if not requests:
-        raise SystemExit("requests not installed; run 1_install_packages.bat")
+        raise SystemExit("requests not installed; run 0_install_packages.bat")
     target.parent.mkdir(parents=True, exist_ok=True)
-    with requests.get(url, stream=True, timeout=120) as r:
-        r.raise_for_status()
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
-            for chunk in r.iter_content(chunk_size=8192):
-                if chunk:
+
+    import time
+    import sys
+
+    tmp_path = None
+    try:
+        # Separate timeouts: (connect, read)
+        with requests.get(url, stream=True, timeout=(15, 60)) as r:
+            r.raise_for_status()
+            total = int(r.headers.get('Content-Length', 0))
+            downloaded = 0
+            last_log = 0.0
+            chunk_size = 1024 * 1024  # 1 MB
+            with tempfile.NamedTemporaryFile(delete=False) as tmp:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    if not chunk:
+                        continue
                     tmp.write(chunk)
-            tmp_path = Path(tmp.name)
-    shutil.move(tmp_path, target)
-
-
+                    downloaded += len(chunk)
+                    now = time.time()
+                    if now - last_log >= 1.0:
+                        if total > 0:
+                            pct = int(downloaded * 100 / total)
+                            print(f"[INFO] Downloading... {downloaded/1e6:.1f}MB/{total/1e6:.1f}MB ({pct}%)", flush=True)
+                        else:
+                            print(f"[INFO] Downloaded {downloaded/1e6:.1f}MB", flush=True)
+                        last_log = now
+                tmp_path = Path(tmp.name)
+        shutil.move(tmp_path, target)
+    finally:
+        # Clean up temp file on failure
+        try:
+            if tmp_path and Path(tmp_path).exists() and not Path(target).exists():
+                Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
 
     # Deprecated: creation now handled above with existence check (no overwrite)
     pass

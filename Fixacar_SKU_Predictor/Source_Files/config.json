@@ -1,4 +1,5 @@
 {
-  "consolidado_url": "https://fixacar-public-prod.s3.amazonaws.com/reportes/Consolidado.json"
+  "consolidado_url": "https://fixacar-public-prod.s3.amazonaws.com/reportes/Consolidado.json",
+  "year_start": 2000
 }
 

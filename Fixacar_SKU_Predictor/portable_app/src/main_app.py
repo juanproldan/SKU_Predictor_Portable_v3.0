@@ -189,7 +189,6 @@ NUM_CONSOLIDADO_CHUNKS_FOR_VIN_LOAD = 10
 equivalencias_map_global = {}
 synonym_expansion_map_global = {}  # New: maps synonyms to equivalence group IDs
 abbreviations_map_global = {}  # New: maps abbreviations to full forms
-user_corrections_map_global = {}  # New: maps original text to corrected text
 series_normalization_map_global = {}  # New: maps (maker, series) to normalized_series
 maestro_data_global = []  # This will hold the list of dictionaries
 # VIN details lookup is replaced by models
@@ -283,7 +282,7 @@ class FixacarApp:
     def load_all_data_and_models(self):
         """Loads rules, Maestro, and lightweight models on startup (no pandas, no sklearn)."""
         global equivalencias_map_global, synonym_expansion_map_global, maestro_data_global
-        global abbreviations_map_global, user_corrections_map_global
+        global abbreviations_map_global
         global vin_lookup_model
 
         print("--- Loading Application Data & Models ---")
@@ -581,110 +580,6 @@ class FixacarApp:
         """Use the single, shared text processor. Hard-fail if unavailable."""
         return preprocess_text(text)
 
-    def apply_user_corrections(self, text: str) -> str:
-        """Deprecated: User_Corrections are no longer used."""
-        return text
-
-    def _apply_word_level_corrections(self, text: str) -> str:
-        """
-        Apply context-aware word-level corrections learned from user feedback.
-        """
-        from utils.text_utils import NOUN_GENDERS
-
-        words = text.split()
-        corrected_words = words.copy()
-
-        # Look for word-level correction patterns in the corrections map
-        for correction_key, correction_value in user_corrections_map_global.items():
-            if correction_key.startswith("WORD: "):
-                # Parse the word correction pattern
-                word_pattern = self._parse_word_correction_pattern(correction_key, correction_value)
-                if word_pattern:
-                    # Apply this word correction if context matches
-                    corrected_words = self._apply_word_pattern(corrected_words, word_pattern)
-
-        return ' '.join(corrected_words)
-
-    def _parse_word_correction_pattern(self, correction_key: str, correction_value: str) -> dict:
-        """
-        Parse a word correction pattern from the stored format.
-        Example: "WORD: DERECHO → DERECHA (after_feminine_noun)"
-        """
-        try:
-            # Remove "WORD: " prefix
-            pattern_part = correction_key[6:]  # Remove "WORD: "
-
-            # Split on " → " to get original and corrected word
-            if " → " in pattern_part:
-                parts = pattern_part.split(" → ")
-                original_word = parts[0].strip()
-
-                # The second part might have context in parentheses
-                remaining = parts[1].strip()
-                if "(" in remaining and remaining.endswith(")"):
-                    # Extract corrected word and context
-                    paren_pos = remaining.find("(")
-                    corrected_word = remaining[:paren_pos].strip()
-                    context_type = remaining[paren_pos+1:-1].strip()  # Remove parentheses
-                else:
-                    corrected_word = remaining
-                    context_type = "unknown"
-
-                return {
-                    'original_word': original_word,
-                    'corrected_word': correction_value,  # Use the actual correction value
-                    'context_type': context_type
-                }
-        except Exception as e:
-            print(f"    ⚠️ Error parsing word pattern '{correction_key}': {e}")
-
-        return None
-
-    def _apply_word_pattern(self, words: list, pattern: dict) -> list:
-        """
-        Apply a word correction pattern to a list of words if context matches.
-        """
-        from utils.text_utils import NOUN_GENDERS
-
-        corrected_words = words.copy()
-        original_word = pattern['original_word'].lower()
-        corrected_word = pattern['corrected_word'].lower()
-        context_type = pattern['context_type']
-
-        for i, word in enumerate(words):
-            if word.lower() == original_word:
-                # Check if context matches
-                should_apply = False
-
-                if context_type == "unknown":
-                    # Apply without context checking
-                    should_apply = True
-                elif context_type.startswith("after_") and context_type.endswith("_noun"):
-                    # Check for preceding noun with matching gender
-                    required_gender = context_type.replace("after_", "").replace("_noun", "")
-
-                    # Look for preceding noun within 3 words
-                    for j in range(max(0, i - 3), i):
-                        preceding_word = words[j].lower()
-                        if preceding_word in NOUN_GENDERS:
-                            if NOUN_GENDERS[preceding_word] == required_gender:
-                                should_apply = True
-                                print(f"    🎯 Context match: '{word}' after {required_gender} noun '{preceding_word}'")
-                            break
-
-                if should_apply:
-                    # Preserve original case pattern
-                    if word.isupper():
-                        corrected_words[i] = corrected_word.upper()
-                    elif word.istitle():
-                        corrected_words[i] = corrected_word.capitalize()
-                    else:
-                        corrected_words[i] = corrected_word
-
-                    print(f"    🔧 Applied word correction: '{word}' → '{corrected_words[i]}'")
-
-        return corrected_words
-
     def apply_abbreviations(self, text: str) -> str:
         """
         Apply abbreviations expansion from the Abbreviations tab.
@@ -713,10 +608,6 @@ class FixacarApp:
 
 
         return ' '.join(expanded_words)
-
-    def save_user_correction(self, original_text: str, corrected_text: str):
-        """Deprecated: User_Corrections are no longer used."""
-        return
 
     def _analyze_correction_for_word_learning(self, original_text: str, corrected_text: str) -> list:
         """
@@ -854,11 +745,7 @@ class FixacarApp:
         def save_correction():
             corrected_text = correction_var.get().strip()
             if corrected_text and corrected_text != display_desc:
-                # Save the correction (map from ORIGINAL text to corrected text)
-                # This ensures the correction is found during processing pipeline
-                self.save_user_correction(original_desc, corrected_text)
-
-                # Reload text processing rules to include the new correction
+                # User_Corrections removed; no persistence or reload
                 self.load_text_processing_rules(DEFAULT_TEXT_PROCESSING_PATH)
 
                 # Re-process only the SKU search with the new correction (don't clear VIN details)
@@ -1121,10 +1008,10 @@ class FixacarApp:
     def load_text_processing_rules(self, file_path: str):
         """
         Load all text processing rules from Text_Processing_Rules.xlsx using openpyxl only.
-        Includes equivalencias, abbreviations, user corrections, and series normalization.
+        Includes equivalencias, abbreviations, and series normalization. User_Corrections removed.
         """
         global equivalencias_map_global, synonym_expansion_map_global
-        global abbreviations_map_global, user_corrections_map_global, series_normalization_map_global
+        global abbreviations_map_global, series_normalization_map_global
 
         print(f"Loading text processing rules from: {file_path}")
         if not os.path.exists(file_path):
@@ -1164,19 +1051,6 @@ class FixacarApp:
             else:
                 abbreviations_map_global = {}
 
-            # User Corrections
-            if 'User_Corrections' in wb.sheetnames:
-                sh = wb['User_Corrections']
-                headers = [c.value for c in next(sh.iter_rows(min_row=1, max_row=1))]
-                col_idx = {h: i for i, h in enumerate(headers)}
-                user_corrections_map_global = {}
-                for row in sh.iter_rows(min_row=2, values_only=True):
-                    orig = row[col_idx.get('Original_Text',0)]
-                    corr = row[col_idx.get('Corrected_Text',1)]
-                    if orig and corr:
-                        user_corrections_map_global[str(orig)] = str(corr)
-            else:
-                user_corrections_map_global = {}
 
             # Series normalization
             if 'Series' in wb.sheetnames:
@@ -1209,7 +1083,6 @@ class FixacarApp:
             print(f"✅ Loaded text processing rules:")
             print(f"   - Equivalencias: {len(equivalencias_map_global)} mappings")
             print(f"   - Abbreviations: {len(abbreviations_map_global)} mappings")
-            print(f"   - User Corrections: {len(user_corrections_map_global)} mappings")
             print(f"   - Series Normalization: {len(series_normalization_map_global)} mappings")
 
         except Exception as e:
@@ -1217,7 +1090,6 @@ class FixacarApp:
             equivalencias_map_global = {}
             synonym_expansion_map_global = {}
             abbreviations_map_global = {}
-            user_corrections_map_global = {}
             series_normalization_map_global = {}
 
     def _process_equivalencias_data(self, rows) -> dict:
@@ -1248,23 +1120,6 @@ class FixacarApp:
                     abbreviations_map[ab] = canonical
         return abbreviations_map
 
-    def _process_user_corrections_data(self, rows) -> dict:
-        corrections_map = {}
-        # Expect headers present in first row handled by caller
-        for row in rows:
-            # row is a dict-like mapping by caller in our openpyxl loader; keep resilient
-            original = row.get('Original_Text') if isinstance(row, dict) else None
-            corrected = row.get('Corrected_Text') if isinstance(row, dict) else None
-            if original and corrected:
-                o = str(original).strip()
-                c = str(corrected).strip()
-                if o and c:
-                    corrections_map[o] = c
-                    if o.startswith("WORD: "):
-                        print(f"    🔧 Loaded word-level pattern: {o}")
-                    else:
-                        print(f"    📝 Loaded phrase correction: {o} → {c}")
-        return corrections_map
 
     def _process_series_normalization_data(self, rows) -> dict:
         series_map = {}
@@ -1889,9 +1744,9 @@ class FixacarApp:
             for original_desc in original_descripcions:
                 print(f"  Processing: '{original_desc}'")
 
-                # STEP 1: Apply user corrections FIRST (highest priority)
-                corrected_desc = self.apply_user_corrections(original_desc)
-                if corrected_desc != original_desc:
+                # User_Corrections removed; use original_desc directly
+                corrected_desc = original_desc
+                if False:
                     print(f"  ✅ User correction applied: '{original_desc}' → '{corrected_desc}'")
 
                 # STEP 2: Normalize the corrected description (without synonym expansion)
@@ -2360,9 +2215,9 @@ class FixacarApp:
                 original_desc = part_info["original"]
                 normalized_original = part_info["normalized_original"]
 
-                # Apply user corrections first (highest priority), then use normalized version
-                corrected_desc = self.apply_user_corrections(original_desc)
-                if corrected_desc != original_desc:
+                # User_Corrections removed; use original_desc directly
+                corrected_desc = original_desc
+                if False:
                     # User correction exists - use it for display
                     display_desc = corrected_desc.upper()
                     print(f"🎯 Display using phrase correction: '{original_desc}' → '{display_desc}'")

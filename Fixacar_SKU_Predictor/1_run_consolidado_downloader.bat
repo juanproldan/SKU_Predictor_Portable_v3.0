@@ -23,11 +23,11 @@ if errorlevel 1 (
   exit /b 1
 )
 
-py -3.11 scripts\01_sync_consolidado.py --download %* > "%LOGFILE%" 2>&1
+REM Run and show live output in console (progress is printed by the script)
+py -3.11 scripts\01_sync_consolidado.py --download %*
 set "ERR=%ERRORLEVEL%"
-type "%LOGFILE%"
 if not "%ERR%"=="0" (
-  echo [ERROR] Sync failed. See log above.
+  echo [ERROR] Sync failed. See messages above.
   pause
   popd
   exit /b %ERR%

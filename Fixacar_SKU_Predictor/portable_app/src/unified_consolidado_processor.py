@@ -38,8 +38,7 @@ if SRC_DIR not in sys.path:
 # Use the single shared text processor; no legacy/text_utils fallbacks
 from utils.unified_text import unified_text_preprocessing
 
-# Global variables for text processing maps
-user_corrections_map_global = {}
+# Global variables for text processing maps (User_Corrections removed)
 abbreviations_map_global = {}
 synonym_expansion_map_global = {}
 
@@ -65,6 +64,8 @@ LOGS_DIR = os.path.join(BASE_PATH, "logs")
 # File paths - everything in Source_Files for client structure
 CONSOLIDADO_PATH = os.path.join(DATA_DIR, "Consolidado.json")
 TEXT_PROCESSING_PATH = os.path.join(DATA_DIR, "Text_Processing_Rules.xlsx")
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+
 OUTPUT_DB_PATH = os.path.join(DATA_DIR, "processed_consolidado.db")
 LOG_PATH = os.path.join(LOGS_DIR, f"consolidado_processing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
@@ -81,6 +82,8 @@ def setup_logging(verbose: bool = False):
         from utils.logging_config import get_logger, create_processing_config, log_operation_start
         config = create_processing_config(verbose=verbose)
         return get_logger("consolidado_processor", config)
+
+
     except ImportError:
         # Fallback to basic logging if logging_config not available
         os.makedirs(LOGS_DIR, exist_ok=True)
@@ -110,6 +113,7 @@ def validate_vin_format(vin_str):
         return False
 
     # After canonicalization, VIN should only contain A-H, J-N, P, R-Z, 0-9
+
     import re
     if not re.match(r'^[A-HJ-NPR-Z0-9]{17}$', vin_str):
         return False
@@ -136,6 +140,24 @@ def validate_vin_check_digit(vin_str):
 
     # Position weights for check digit calculation
     weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2]
+# Config: year_start in Source_Files/config.json (default 1990)
+DEFAULT_YEAR_START = 1990
+
+def load_config():
+    cfg = {"year_start": DEFAULT_YEAR_START}
+    try:
+        if os.path.exists(CONFIG_PATH):
+            import json
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    y = data.get("year_start")
+                    if isinstance(y, int):
+                        cfg["year_start"] = y
+    except Exception:
+        pass
+    return cfg
+
 
     try:
         total = sum(char_values[char] * weight for char, weight in zip(vin_str, weights))
@@ -149,6 +171,11 @@ def clean_vin_for_training(vin):
     """
     Clean and validate VIN for training purposes.
     Returns cleaned VIN if valid, None if invalid.
+
+    Rules:
+    - Uppercase and replace I→1, O/Q→0
+    - Reject if not length 17 or contains invalid charset
+    - Reject if any character repeats >4 times consecutively (noise VINs)
     """
     if not vin:
         return None
@@ -158,6 +185,11 @@ def clean_vin_for_training(vin):
 
     # Basic format validation
     if not validate_vin_format(vin_str):
+        return None
+
+    # Reject VINs with any character repeated >4 times consecutively
+    import re
+    if re.search(r'(.)\1{4,}', vin_str):
         return None
 
     # Optional: Check digit validation (commented out as it may be too strict)
@@ -234,7 +266,13 @@ def setup_database(db_path):
         )
         ''')
 
-
+        # Metadata table for build reproducibility
+        cursor.execute('''
+        CREATE TABLE metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+        ''')
 
         # Create indexes for better query performance
         cursor.execute('CREATE INDEX idx_vin_training ON processed_consolidado (vin_number, maker, model, series)')
@@ -288,37 +326,6 @@ def load_equivalencias_map(text_processing_path):
         logger.error(f"Error loading equivalencias map: {e}")
         raise
 
-def load_user_corrections_map(text_processing_path):
-    """
-    Load user corrections mapping from Text_Processing_Rules.xlsx User_Corrections tab.
-    Returns dictionary mapping original text to corrected text.
-    """
-    logger = logging.getLogger(__name__)
-
-    if not os.path.exists(text_processing_path):
-        logger.warning(f"Text processing rules file not found at {text_processing_path}")
-        return {}
-
-    try:
-        wb = openpyxl.load_workbook(text_processing_path, data_only=True)
-        sh = wb['User_Corrections']
-        headers = [c.value for c in next(sh.iter_rows(min_row=1, max_row=1))]
-        col_idx = {h: i for i, h in enumerate(headers)}
-        corrections_map = {}
-        for row in sh.iter_rows(min_row=2, values_only=True):
-            orig = row[col_idx.get('Original_Text', 0)]
-            corr = row[col_idx.get('Corrected_Text', 1)]
-            if orig is not None and corr is not None:
-                original = str(orig).strip()
-                corrected = str(corr).strip()
-                if original and corrected:
-                    corrections_map[original] = corrected
-        logger.info(f"Loaded {len(corrections_map)} user corrections")
-        return corrections_map
-
-    except Exception as e:
-        logger.error(f"Error loading user corrections map: {e}")
-        return {}
 
 def load_abbreviations_map(text_processing_path):
     """
@@ -462,21 +469,6 @@ def normalize_series_preprocessing(maker, series, series_map):
     return series
 
 # --- Unified Text Processing Functions ---
-def apply_user_corrections(text: str) -> str:
-    """
-    Apply user corrections from the User_Corrections tab.
-    This has the HIGHEST priority in text processing.
-    """
-    if not text or not user_corrections_map_global:
-        return text
-
-    # Check for exact phrase match first (highest priority)
-    if text in user_corrections_map_global:
-        corrected = user_corrections_map_global[text]
-        # Removed verbose logging for performance
-        return corrected
-
-    return text
 
 def apply_abbreviations(text: str) -> str:
     """
@@ -622,9 +614,6 @@ def aggregate_sku_year_ranges(conn):
 
     # Get all SKU combinations with their years and frequencies
     # Enforce valid model year bounds in aggregation
-    from datetime import datetime as _dt
-    _min_year = 1990
-    _max_year = _dt.now().year + 2
     cursor.execute("""
         SELECT maker, series, descripcion, normalized_descripcion, referencia, model, COUNT(*) as frequency
         FROM processed_consolidado
@@ -635,10 +624,9 @@ def aggregate_sku_year_ranges(conn):
         AND maker IS NOT NULL
         AND series IS NOT NULL
         AND model IS NOT NULL
-        AND model BETWEEN ? AND ?
         GROUP BY maker, series, descripcion, normalized_descripcion, referencia, model
         ORDER BY maker, series, referencia, model
-    """, (_min_year, _max_year))
+    """)
 
     raw_data = cursor.fetchall()
     logger.info(f"📊 Processing {len(raw_data):,} individual year records for SKU aggregation")
@@ -717,6 +705,7 @@ def build_vin_prefix_frequencies(conn: sqlite3.Connection) -> int:
     conn.create_function("is_valid_vin", 1, _is_valid_vin)
 
     # Rebuild table
+    # Build VIN prefix frequency table
     cur.execute('DROP TABLE IF EXISTS vin_prefix_frequencies')
     cur.execute(
         '''
@@ -750,7 +739,76 @@ def build_vin_prefix_frequencies(conn: sqlite3.Connection) -> int:
     conn.commit()
 
     cur.execute('SELECT COUNT(*) FROM vin_prefix_frequencies')
-    return cur.fetchone()[0]
+    row = cur.fetchone()
+    try:
+        return int(row[0]) if row and row[0] is not None else 0
+    except Exception:
+        return 0
+
+
+
+def write_metadata(conn: sqlite3.Connection, extra: dict):
+    import hashlib
+    cur = conn.cursor()
+    # Compute checksum of rules file
+    checksum = ""
+    try:
+        with open(TEXT_PROCESSING_PATH, 'rb') as f:
+            checksum = hashlib.sha256(f.read()).hexdigest()
+    except Exception:
+        checksum = ""
+    from datetime import datetime as _dt
+    now = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
+    items = {
+        "processor_version": "3.0",
+        "rules_checksum": checksum,
+        "build_timestamp": now,
+    }
+    items.update({k: str(v) for k, v in (extra or {}).items()})
+    # Clear and insert
+    cur.execute('DELETE FROM metadata')
+    for k, v in items.items():
+        cur.execute('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)', (k, v))
+    conn.commit()
+
+    cur.execute('DROP TABLE IF EXISTS vin_prefix_frequencies')
+    cur.execute(
+        '''
+        CREATE TABLE vin_prefix_frequencies (
+            vin_mask TEXT,
+            maker TEXT,
+            model INTEGER,
+            series TEXT,
+            frequency INTEGER,
+            PRIMARY KEY (vin_mask, maker, model, series)
+        )
+        '''
+    )
+
+    cur.execute(
+        '''
+        INSERT OR REPLACE INTO vin_prefix_frequencies (vin_mask, maker, model, series, frequency)
+        SELECT SUBSTR(UPPER(vin_number), 1, 11) || 'XXXXXX' AS vin_mask,
+               maker, model, series,
+               COUNT(DISTINCT UPPER(vin_number)) AS frequency
+        FROM processed_consolidado
+        WHERE vin_number IS NOT NULL
+          AND maker IS NOT NULL AND model IS NOT NULL AND series IS NOT NULL
+          AND is_valid_vin(vin_number)
+        GROUP BY vin_mask, maker, model, series
+        '''
+    )
+
+    # Index for lookup performance
+    cur.execute('CREATE INDEX idx_vin_mask_lookup ON vin_prefix_frequencies (vin_mask, maker, model, series)')
+    conn.commit()
+
+    cur.execute('SELECT COUNT(*) FROM vin_prefix_frequencies')
+    row = cur.fetchone()
+    try:
+        return int(row[0]) if row and row[0] is not None else 0
+    except Exception:
+        return 0
 
 
 
@@ -836,7 +894,8 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
         'skipped_duplicates': 0,
         'vin_training_records': 0,
         'sku_training_records': 0,
-        'both_training_records': 0
+        'both_training_records': 0,
+        'skipped_out_of_range_year': 0,
     }
 
     try:
@@ -850,6 +909,12 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
         cursor = conn.cursor()
 
         # Start processing timer
+        # Load config for early year filtering
+        cfg = load_config()
+        from datetime import datetime as _dt
+        _min_year = int(cfg.get("year_start", DEFAULT_YEAR_START))
+        _max_year = _dt.now().year + 2
+
         processing_start_time = time.time()
 
         # Process each record with progress bar
@@ -871,6 +936,7 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
         progress_interval = max(1000, stats['total_records'] // 100)  # Report every 1% or 1000 records, whichever is larger
 
         for record_idx, record in enumerate(all_records):
+            # Early record-level year filter: skip entire record if model out of range
             # Update progress bar or fallback to text progress
             if progress_bar:
                 progress_bar.update(1)
@@ -878,6 +944,18 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                 elapsed = time.time() - processing_start_time
                 rate = record_idx / elapsed if elapsed > 0 else 0
                 eta_seconds = (stats['total_records'] - record_idx) / rate if rate > 0 else 0
+
+            # Early record-level year filter: skip entire record if model out of range
+            try:
+                _raw_model = record.get('model')
+                _rec_year = int(str(_raw_model)) if (_raw_model is not None and str(_raw_model).isdigit()) else None
+            except Exception:
+                _rec_year = None
+            if _rec_year is None or not (_min_year <= _rec_year <= _max_year):
+                stats['skipped_out_of_range_year'] += 1
+                continue
+
+
                 eta_minutes = eta_seconds / 60
 
                 progress_pct = (record_idx / stats['total_records']) * 100
@@ -889,7 +967,10 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
             stats['total_items'] += len(items)
 
             # Extract VIN info from record level (simplified - removed unused fields)
-            vin_number = record.get('vin_number')
+            vin_number_raw = record.get('vin_number')
+            # Canonicalize VIN characters early (I->1, O/Q->0, uppercase)
+            vin_number = canonicalize_vin_chars(vin_number_raw) if vin_number_raw else None
+
             maker = record.get('maker')  # Field is 'maker'
             model = record.get('model')  # Field is 'model'
             series = record.get('series')  # Field is 'series'
@@ -978,7 +1059,8 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                 'Both Training Records': f"{stats['both_training_records']:,}",
                 'Skipped (Insufficient)': f"{stats['skipped_insufficient_data']:,}",
                 'Skipped (Duplicates)': f"{stats['skipped_duplicates']:,}",
-                'Processing Rate': f"{stats['total_records']/total_processing_time:.0f} rec/s"
+                'Processing Rate': f"{stats['total_records']/total_processing_time:.0f} rec/s",
+                'Skipped (Out-of-range Year)': f"{stats['skipped_out_of_range_year']:,}",
             }
             log_operation_complete(logger, "Consolidado Processing", total_processing_time, processing_stats)
         except ImportError:
@@ -1046,10 +1128,7 @@ def main(verbose: bool = False):
 
     # Load unified text processing maps (hard-fail on problems)
     logger.info("Loading unified text processing maps...")
-    global user_corrections_map_global, abbreviations_map_global, synonym_expansion_map_global
-
-    user_corrections_map_global = load_user_corrections_map(TEXT_PROCESSING_PATH)
-    logger.info(f"Loaded {len(user_corrections_map_global)} user corrections")
+    global abbreviations_map_global, synonym_expansion_map_global
 
     abbreviations_map_global = load_abbreviations_map(TEXT_PROCESSING_PATH)
     logger.info(f"Loaded {len(abbreviations_map_global)} abbreviations")
@@ -1108,6 +1187,17 @@ def main(verbose: bool = False):
             # Year range statistics
             cursor.execute("SELECT COUNT(*) FROM sku_year_ranges")
             sku_year_ranges = cursor.fetchone()[0]
+
+            # Write metadata
+            cfg = load_config()
+            write_metadata(conn, {
+                'total_records': total_records,
+                'vin_training_ready': vin_training_ready,
+                'sku_training_ready': sku_training_ready,
+                'sku_year_ranges': sku_year_ranges,
+                'vin_prefix_rows': vin_prefix_rows,
+                'year_start': cfg.get('year_start', DEFAULT_YEAR_START),
+            })
 
 
 

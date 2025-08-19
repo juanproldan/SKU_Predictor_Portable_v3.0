@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Add a hyperlink in NewAbbreviations2 sheet to run the promotions runner.
+Add a hyperlink in NewAbbreviations sheet to run the promotions runner.
 Places link in J1 to avoid interfering with header columns.
 """
 from __future__ import annotations
@@ -19,9 +19,9 @@ def main():
         raise SystemExit(f"Runner not found: {BATCH}")
 
     wb = openpyxl.load_workbook(XLSX)
-    if 'NewAbbreviations2' not in wb.sheetnames:
-        raise SystemExit("Sheet 'NewAbbreviations2' not found. Generate it first.")
-    sh = wb['NewAbbreviations2']
+    if 'NewAbbreviations' not in wb.sheetnames:
+        raise SystemExit("Sheet 'NewAbbreviations' not found. Generate it first.")
+    sh = wb['NewAbbreviations']
 
     cell = sh['J1']
     cell.value = '▶ Run Promotions (auto-closes Excel + runs data processor)'
@@ -29,7 +29,7 @@ def main():
     cell.style = 'Hyperlink'
 
     wb.save(XLSX)
-    print('Added hyperlink to NewAbbreviations2! Cell J1.')
+    print('Added hyperlink to NewAbbreviations! Cell J1.')
 
 
 if __name__ == '__main__':
