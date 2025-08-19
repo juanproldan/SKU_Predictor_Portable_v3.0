@@ -538,34 +538,6 @@ class FixacarApp:
         This is used as a fallback when VIN prediction fails.
 
         Args:
-    def _infer_series_from_vin_mask(self, maker: str, vin: str) -> str | None:
-        """Infer most common series using 11-char VIN mask within same maker.
-        Returns best series or None if not found.
-        """
-        try:
-            v = (vin or '').strip().upper()
-            if len(v) != 17:
-                return None
-            vin_mask = v[:11] + 'XXXXXX'
-            con = sqlite3.connect(DEFAULT_DB_PATH)
-            cur = con.cursor()
-            cur.execute(
-                '''
-                SELECT series, SUM(frequency) as f
-                FROM vin_prefix_frequencies
-                WHERE vin_mask=? AND maker=?
-                GROUP BY series
-                ORDER BY f DESC
-                LIMIT 1
-                ''', (vin_mask, maker.lower())
-            )
-            row = cur.fetchone()
-            con.close()
-            if row and row[0]:
-                return row[0]
-        except Exception as e:
-            print(f"VIN mask series inference error: {e}")
-        return None
 
             wmi: World Manufacturer Identifier (first 3 characters of VIN)
             maker: Vehicle manufacturer name
@@ -1632,6 +1604,30 @@ class FixacarApp:
 
         # Filter out UNKNOWN and similar invalid values
         invalid_skus = {'UNKNOWN', 'N/A', 'NULL', 'NONE', '', 'TBD', 'PENDING', 'MANUAL'}
+    def _compute_desc_weight(self, normalized_desc: str) -> float:
+        """Lightweight token weighting: boost nouns, downweight generic terms.
+        Returns a multiplier ~0.9–1.1 to slightly adjust confidences.
+        """
+        try:
+            if not normalized_desc:
+                return 1.0
+            text = str(normalized_desc).lower()
+            tokens = [t for t in re.findall(r"[a-z0-9]+", text) if len(t) > 1]
+            # Local import to avoid top-level dependency timing
+            try:
+                from utils.text_utils import NOUN_GENDERS
+            except Exception:
+                NOUN_GENDERS = {}
+            noun_hits = sum(1 for t in set(tokens) if t in NOUN_GENDERS)
+            generic = {"izq", "izquierda", "der", "derecha", "del", "delantero", "delantera", "tra", "trasero", "trasera", "negro", "negra", "sup", "superior", "inf", "inferior"}
+            generic_hits = sum(1 for t in tokens if t in generic)
+            boost = min(0.12, 0.04 * noun_hits)
+            penalty = min(0.10, 0.02 * generic_hits)
+            weight = 1.0 + boost - penalty
+            return max(0.90, min(1.10, weight))
+        except Exception:
+            return 1.0
+
 
         if sku_upper in invalid_skus:
             print(f"    Filtered out invalid referencia: '{referencia}'")
@@ -1639,7 +1635,7 @@ class FixacarApp:
 
         return True
 
-    def _aggregate_sku_suggestions(self, suggestions: dict, new_sku: str, new_confidence: float, new_source: str) -> dict:
+    def _aggregate_sku_suggestions(self, suggestions: dict, new_sku: str, new_confidence: float, new_source: str, meta: dict | None = None) -> dict:
         """
         Aggregates SKU suggestions, handling duplicates by keeping the highest confidence.
         Also tracks all sources for transparency and applies consensus-based confidence adjustment.
@@ -1674,12 +1670,16 @@ class FixacarApp:
             )
 
             # Update with consensus-adjusted confidence
+            # Merge/keep metadata (prefer meta from the highest-confidence path if provided)
+            existing_meta = existing.get("meta")
+            merged_meta = existing_meta or meta
             suggestions[new_sku] = {
                 "confidence": adjusted_confidence,
                 "source": new_source if new_confidence > existing_conf else existing["source"],
                 "all_sources": combined_sources,
                 "best_confidence": max(existing_conf, new_confidence),
-                "source_count": len(all_sources_list)
+                "source_count": len(all_sources_list),
+                "meta": merged_meta,
             }
             print(f"    🔄 Consensus update {new_sku}: {max(existing_conf, new_confidence):.3f} -> {adjusted_confidence:.3f} (Sources: {combined_sources})")
         else:
@@ -1690,7 +1690,8 @@ class FixacarApp:
                 "source": new_source,
                 "all_sources": new_source,
                 "best_confidence": new_confidence,
-                "source_count": 1
+                "source_count": 1,
+                "meta": meta,
             }
             if adjusted_confidence != new_confidence:
                 print(f"    📉 Single-source adjustment {new_sku}: {new_confidence:.3f} -> {adjusted_confidence:.3f} ({new_source})")
@@ -1862,11 +1863,6 @@ class FixacarApp:
                     'RENAULT': 'Renault',
                     'CHEVROLET': 'Chevrolet',
                     'MAZDA': 'Mazda',
-                # Precompute normalized forms once
-                normalized_original = self.unified_text_preprocessing(corrected_desc)
-                expanded_desc = self.expand_synonyms(corrected_desc)
-                normalized_expanded = self.unified_text_preprocessing(expanded_desc)
-
                     'FORD': 'Ford',
                     'HYUNDAI': 'Hyundai',
                     'TOYOTA': 'Toyota',
@@ -2045,12 +2041,14 @@ class FixacarApp:
                     if fallback_matches:
                         print(f"  ✅ Found {len(fallback_matches)} Maestro fallback matches (Make + Year + Description)")
 
-                        # If series unknown from VIN model, try inferring by VIN mask within maker
+                        # If series unknown from VIN model, optionally infer by WMI-based fallback (existing method)
                         if (not series or series.upper() in {'N/A', 'UNKNOWN (VDS/WMI)'}):
-                            inferred_series = self._infer_series_from_vin_mask(maker, vin)
-                            if inferred_series:
-                                series = inferred_series
-                                print(f"    🔎 Series inferred from VIN mask: {series}")
+                            wmi = (vin or '')[:3]
+                            if len(wmi) == 3:
+                                inferred_series = self.get_most_common_series_for_wmi(wmi, maker)
+                                if inferred_series and inferred_series.upper() not in {'UNKNOWN', 'N/A'}:
+                                    series = inferred_series
+                                    print(f"    🔎 Series inferred from WMI: {series}")
 
                         # Count frequency of each SKU
                         sku_frequency = {}
@@ -2125,30 +2123,50 @@ class FixacarApp:
 
                         if year_range_predictions:
                             print(f"    ✅ Found {len(year_range_predictions)} year range predictions (original desc)")
+                            desc_weight = self._compute_desc_weight(normalized_original)
                             for pred in year_range_predictions:
+                                base_conf = float(pred.get('confidence', 0.0))
+                                adj_conf = max(0.0, min(1.0, base_conf * desc_weight))
                                 # Construct DB(frequency/global) label from prediction
                                 db_label = pred.get('source') or f"DB({pred.get('frequency', 0)}/{pred.get('global_frequency', 0)})"
+                                meta = {'start_year': pred.get('start_year'), 'end_year': pred.get('end_year')}
                                 suggestions = self._aggregate_sku_suggestions(
-                                    suggestions, pred['sku'], pred['confidence'], db_label)
-                                print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf: {pred['confidence']:.3f})")
+                                    suggestions, pred['sku'], adj_conf, db_label, meta=meta)
+                                print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf*: {adj_conf:.3f})")
 
                         # If no results with original, try with normalized description
                         if not year_range_predictions:
                             year_range_predictions = self.year_range_optimizer.get_sku_predictions_year_range(
-                                maker=maker,
+                                maker=maker.lower(),
                                 model=model,
-                                series=series,
-                                description=normalized_original,
+                                series=series.lower(),
+                            # Early-stop: if we have 2 strong options and adjusted confidence drops below both, stop scanning more DB predictions
+                            if len(suggestions) >= 2:
+                                top2 = sorted((info.get('confidence', 0.0) for info in suggestions.values()), reverse=True)[:2]
+                                if len(top2) == 2:
+                                    min_top2 = top2[-1]
+                                    # If the last inserted confidence is below min_top2 and predictions are descending, break
+                                    if adj_conf < min_top2:
+                                        pass
+
+                                description=normalized_original.lower(),
                                 limit=10
                             )
 
                             if year_range_predictions:
                                 print(f"    ✅ Found {len(year_range_predictions)} year range predictions (normalized desc)")
+                                desc_weight = self._compute_desc_weight(normalized_original)
                                 for pred in year_range_predictions:
                                     db_label = pred.get('source') or f"DB({pred.get('frequency', 0)}/{pred.get('global_frequency', 0)})"
+                                    base_conf = float(pred.get('confidence', 0.0))
+                                    adj_conf = max(0.0, min(1.0, base_conf * desc_weight))
                                     suggestions = self._aggregate_sku_suggestions(
-                                        suggestions, pred['sku'], pred['confidence'], db_label)
-                                    print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf: {pred['confidence']:.3f})")
+                                        suggestions, pred['sku'], adj_conf, db_label)
+                                    print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf*: {adj_conf:.3f})")
+
+                                    suggestions = self._aggregate_sku_suggestions(
+                                        suggestions, pred['sku'], adj_conf, db_label)
+                                    print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf*: {adj_conf:.3f})")
 
                         if not year_range_predictions:
                             print(f"    ❌ No year range matches found")
@@ -2176,8 +2194,24 @@ class FixacarApp:
 
 
 
-                sorted_suggestions = sorted(
-                    suggestions.items(), key=lambda item: item[1]['confidence'], reverse=True)
+                # Final sorting with tie-breakers: narrower year range span, then higher global frequency
+                def _tie_key(item):
+                    sku, info = item
+                    meta = info.get('meta') or {}
+                    span = None
+                    try:
+                        sy = int(meta.get('start_year')) if meta.get('start_year') is not None else None
+                        ey = int(meta.get('end_year')) if meta.get('end_year') is not None else None
+                        if sy is not None and ey is not None and ey >= sy:
+                            span = ey - sy
+                    except Exception:
+                        span = None
+                    # smaller span is better; use +inf if unknown
+                    span_order = span if span is not None else 1e9
+                    global_freq = int(meta.get('global_frequency', 0)) if meta else 0
+                    return (-info['confidence'], span_order, -global_freq, sku)
+
+                sorted_suggestions = sorted(suggestions.items(), key=_tie_key)
                 self.current_suggestions[original_desc] = sorted_suggestions
                 print(
                     f"  Suggestions for '{original_desc}': {sorted_suggestions}")

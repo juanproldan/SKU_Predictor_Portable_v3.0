@@ -298,7 +298,6 @@ def setup_database(db_path):
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_referencia_training ON processed_consolidado (maker, model, series, referencia)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_exact_match ON processed_consolidado (maker, model, series, normalized_descripcion)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_description_search ON processed_consolidado (normalized_descripcion)')
-        /* Cover maker+series filters without model */
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ms_ref ON processed_consolidado (maker, series, referencia)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ms_normdesc ON processed_consolidado (maker, series, normalized_descripcion)')
 
