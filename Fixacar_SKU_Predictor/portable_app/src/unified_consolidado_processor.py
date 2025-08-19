@@ -298,7 +298,7 @@ def setup_database(db_path):
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_referencia_training ON processed_consolidado (maker, model, series, referencia)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_exact_match ON processed_consolidado (maker, model, series, normalized_descripcion)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_description_search ON processed_consolidado (normalized_descripcion)')
-        -- Cover maker+series filters without model
+        /* Cover maker+series filters without model */
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ms_ref ON processed_consolidado (maker, series, referencia)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ms_normdesc ON processed_consolidado (maker, series, normalized_descripcion)')
 
@@ -307,7 +307,7 @@ def setup_database(db_path):
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sku_frequency ON sku_year_ranges (frequency)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sku_desc_range ON sku_year_ranges (maker, series, normalized_descripcion, start_year, end_year)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sku_year_range_lookup_aprob ON sku_year_ranges_Aprobado (maker, series, start_year, end_year)')
-        cursor.execute('CREATE INDEX idx_sku_frequency_aprob ON sku_year_ranges_Aprobado (frequency DESC)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_sku_frequency_aprob ON sku_year_ranges_Aprobado (frequency)')
 
         conn.commit()
         logger.info("Fresh database and 'processed_consolidado' table created successfully.")
