@@ -668,7 +668,6 @@ def aggregate_sku_year_ranges(conn):
     """)
     raw_data_aprobado = cursor.fetchall()
 
-    raw_data = cursor.fetchall()
     logger.info(f"📊 Processing {len(raw_data):,} individual year records for SKU aggregation")
 
     # Group by (maker, series, descripcion, referencia) and collect years
@@ -880,6 +879,59 @@ def write_metadata(conn: sqlite3.Connection, extra: dict):
 
 
 
+# --- Helpers: date extraction ---
+def coerce_date_value(value):
+    """
+    Extract a usable date string from a variety of shapes seen in consolidado data.
+    - Accepts strings, numbers, dicts (common: {'date': '...'} or {'$date': '...'}), or lists
+    - Returns a stripped string or None
+    """
+    try:
+        visited = set()
+        v = value
+        # Iterate to unwrap nested containers
+        while True:
+            # Guard against recursive structures
+            if id(v) in visited:
+                break
+            visited.add(id(v))
+
+            if v is None:
+                return None
+            if isinstance(v, (str, bytes)):
+                s = v.decode('utf-8', errors='ignore') if isinstance(v, bytes) else v
+                s = s.strip()
+                return s if s else None
+            if isinstance(v, (int, float)):
+                # Keep verbatim as text per requirements
+                return str(int(v)) if isinstance(v, int) or v.is_integer() else str(v)
+            if isinstance(v, dict):
+                # Prefer common keys; fall through if not present
+                for k in ['date', 'Date', 'date_', 'Date_', '$date', 'iso', 'ISO', 'value', 'timestamp',
+                           'fecha', 'Fecha', 'dia', 'Dia',
+                           'created', 'Created', 'createdAt', 'created_at',
+                           'fecha_siniestro', 'fechaSiniestro', 'fecha_reporte', 'fechaReporte',
+                           'fecha_registro', 'fechaRegistro', 'fecha_hora', 'fechaHora']:
+                    if k in v:
+                        v = v.get(k)
+                        break
+                else:
+                    # Unknown dict shape – store nothing rather than a dict string
+                    return None
+                continue
+            if isinstance(v, (list, tuple)):
+                # Use first non-empty element
+                for elem in v:
+                    res = coerce_date_value(elem)
+                    if res:
+                        return res
+                return None
+            # Other types – stringify
+            return str(v).strip() or None
+    except Exception:
+        return None
+
+
 
 # --- Main Processing Logic ---
 def process_consolidado_record(record, series_map=None):
@@ -900,8 +952,17 @@ def process_consolidado_record(record, series_map=None):
     # Optional fields to preserve
     valor = record.get('item_valor') if 'item_valor' in record else (record.get('valor') if 'valor' in record else None)
     aprobado = record.get('aprobado') if 'aprobado' in record else (record.get('Aprobado') if 'Aprobado' in record else None)
-    date_str = (record.get('date') or record.get('Date') or record.get('record_date') or
-                 record.get('Fecha') or record.get('fecha'))
+    # Pull from item- and record-level; accept many common variants
+    date_str = (
+        record.get('date') or record.get('Date') or record.get('date_') or record.get('Date_') or
+        record.get('record_date') or record.get('Fecha') or record.get('fecha') or
+        record.get('dia') or record.get('Dia') or
+        record.get('createdAt') or record.get('created_at') or record.get('created') or record.get('Created') or
+        record.get('fecha_siniestro') or record.get('fechaSiniestro') or
+        record.get('fecha_reporte') or record.get('fechaReporte') or
+        record.get('fecha_registro') or record.get('fechaRegistro') or
+        record.get('fecha_hora') or record.get('fechaHora')
+    )
 
     # Clean VIN if present (but don't discard record if invalid)
     cleaned_vin = clean_vin_for_training(vin) if vin else None
@@ -923,10 +984,8 @@ def process_consolidado_record(record, series_map=None):
         aprobado = None
     date_clean = None
     if date_str not in (None, ''):
-        try:
-            date_clean = str(date_str).strip()
-        except Exception:
-            date_clean = None
+        # coerce nested/dict date shapes into a string; None if not extractable
+        date_clean = coerce_date_value(date_str)
 
     # Apply series normalization during preprocessing (hybrid approach - Phase 1)
     if series and series_map:
@@ -1078,8 +1137,37 @@ def process_consolidado_to_db(conn, consolidado_path, series_map=None):
                     'item_referencia': item.get('referencia'),  # Field is 'referencia'
                     'item_valor': item.get('Valor') if 'Valor' in item else item.get('valor'),
                     'aprobado': item.get('Aprobado') if 'Aprobado' in item else item.get('aprobado'),
-                    'date': item.get('Date') if 'Date' in item else item.get('date'),
-                    'record_date': (record.get('Date') if 'Date' in record else (record.get('date') if 'date' in record else (record.get('Fecha') if 'Fecha' in record else record.get('fecha'))))
+                    'date': coerce_date_value(
+                        item.get('Date') if 'Date' in item else (
+                            item.get('date') if 'date' in item else (
+                                item.get('date_') if 'date_' in item else (
+                                    item.get('Fecha') if 'Fecha' in item else (
+                                        item.get('fecha') if 'fecha' in item else (
+                                            item.get('dia') if 'dia' in item else (
+                                                item.get('Dia') if 'Dia' in item else (
+                                                    item.get('createdAt') if 'createdAt' in item else (
+                                                        item.get('created_at') if 'created_at' in item else item.get('created')
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    ),
+
+                    'record_date': coerce_date_value(
+                        record.get('Date') if 'Date' in record else (
+                            record.get('date') if 'date' in record else (
+                                record.get('Fecha') if 'Fecha' in record else (
+                                    record.get('fecha') if 'fecha' in record else (
+                                        record.get('dia') if 'dia' in record else record.get('Dia')
+                                    )
+                                )
+                            )
+                        )
+                    )
                 }
 
                 # Process the combined record
