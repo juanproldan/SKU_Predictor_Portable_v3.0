@@ -84,7 +84,7 @@ class YearRangeDatabaseOptimizer:
         try:
             cursor.execute("""
                 SELECT referencia, frequency, start_year, end_year, global_sku_frequency
-                FROM sku_year_ranges
+                FROM sku_year_ranges_Aprobado
                 WHERE maker = ?
                 AND series = ?
                 AND (descripcion = ? OR normalized_descripcion = ?)
@@ -129,7 +129,7 @@ class YearRangeDatabaseOptimizer:
                 pattern2 = f"%{short_series}%" if short_series else '%'
                 cursor.execute("""
                     SELECT referencia, frequency, start_year, end_year, global_sku_frequency
-                    FROM sku_year_ranges
+                    FROM sku_year_ranges_Aprobado
                     WHERE maker = ?
                     AND (series LIKE ? OR series LIKE ?)
                     AND (descripcion = ? OR normalized_descripcion = ?)
@@ -163,7 +163,7 @@ class YearRangeDatabaseOptimizer:
             try:
                 cursor.execute("""
                     SELECT referencia, frequency, start_year, end_year, global_sku_frequency
-                    FROM sku_year_ranges
+                    FROM sku_year_ranges_Aprobado
                     WHERE maker = ?
                     AND (descripcion = ? OR normalized_descripcion = ?)
                     AND ? BETWEEN start_year AND end_year

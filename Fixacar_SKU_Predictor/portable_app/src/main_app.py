@@ -2109,15 +2109,16 @@ class FixacarApp:
                 # --- End Neural Network Prediction ---
 
                 # --- Year Range Database Optimization (Priority 3) ---
-                if self.year_range_optimizer and model is not None and series.upper() != 'N/A':
+                # Note: Even if series is 'N/A', we still try maker+description fallback in optimizer.
+                if self.year_range_optimizer and model is not None:
                     print(f"  🚀 Searching Year Range Database (maker: {maker}, model: {model}, series: {series})...")
                     try:
                         # Try with original description first
                         year_range_predictions = self.year_range_optimizer.get_sku_predictions_year_range(
-                            maker=maker,
+                            maker=maker.lower(),
                             model=model,
-                            series=series,
-                            description=original_desc,
+                            series=series.lower(),
+                            description=original_desc.lower(),
                             limit=10
                         )
 
@@ -2140,15 +2141,6 @@ class FixacarApp:
                                 maker=maker.lower(),
                                 model=model,
                                 series=series.lower(),
-                            # Early-stop: if we have 2 strong options and adjusted confidence drops below both, stop scanning more DB predictions
-                            if len(suggestions) >= 2:
-                                top2 = sorted((info.get('confidence', 0.0) for info in suggestions.values()), reverse=True)[:2]
-                                if len(top2) == 2:
-                                    min_top2 = top2[-1]
-                                    # If the last inserted confidence is below min_top2 and predictions are descending, break
-                                    if adj_conf < min_top2:
-                                        pass
-
                                 description=normalized_original.lower(),
                                 limit=10
                             )
@@ -2157,16 +2149,18 @@ class FixacarApp:
                                 print(f"    ✅ Found {len(year_range_predictions)} year range predictions (normalized desc)")
                                 desc_weight = self._compute_desc_weight(normalized_original)
                                 for pred in year_range_predictions:
-                                    db_label = pred.get('source') or f"DB({pred.get('frequency', 0)}/{pred.get('global_frequency', 0)})"
                                     base_conf = float(pred.get('confidence', 0.0))
                                     adj_conf = max(0.0, min(1.0, base_conf * desc_weight))
+                                    db_label = pred.get('source') or f"DB({pred.get('frequency', 0)}/{pred.get('global_frequency', 0)})"
+                                    meta = {'start_year': pred.get('start_year'), 'end_year': pred.get('end_year')}
                                     suggestions = self._aggregate_sku_suggestions(
-                                        suggestions, pred['sku'], adj_conf, db_label)
+                                        suggestions, pred['sku'], adj_conf, db_label, meta=meta)
                                     print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf*: {adj_conf:.3f})")
 
-                                    suggestions = self._aggregate_sku_suggestions(
-                                        suggestions, pred['sku'], adj_conf, db_label)
-                                    print(f"    📅 DB Year Range: {pred['sku']} (DB {pred.get('frequency', 0)}/{pred.get('global_frequency', 0)}, Range: {pred['year_range']}, Conf*: {adj_conf:.3f})")
+                                    # Early-stop: if two top suggestions exist and current confidence is lower than both, stop scanning
+                                    top2 = sorted((info.get('confidence', 0.0) for info in suggestions.values()), reverse=True)[:2]
+                                    if len(top2) == 2 and adj_conf < top2[-1]:
+                                        break
 
                         if not year_range_predictions:
                             print(f"    ❌ No year range matches found")
