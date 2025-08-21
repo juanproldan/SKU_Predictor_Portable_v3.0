@@ -1443,7 +1443,7 @@ class FixacarApp:
             collapsed = []
             db_seen = False
             for s in sources:
-                if s.startswith("DB("):
+                if s.startswith("DB(") or s.startswith("DBA("):
                     if db_seen:
                         continue
                     db_seen = True
@@ -1593,17 +1593,28 @@ class FixacarApp:
 
     def _is_valid_sku(self, referencia: str) -> bool:
         """
-        Validates if a SKU is acceptable for suggestions.
-        Filters out UNKNOWN, empty, or invalid SKUs.
+        Validate that a SKU is acceptable for suggestions.
+        Rejects blanks and placeholders like UNKNOWN/N/A/MANUAL.
         """
         if not referencia or not referencia.strip():
             return False
 
-        # Convert to uppercase for consistent checking
         sku_upper = referencia.strip().upper()
 
-        # Filter out UNKNOWN and similar invalid values
-        invalid_skus = {'UNKNOWN', 'N/A', 'NULL', 'NONE', '', 'TBD', 'PENDING', 'MANUAL'}
+        # Placeholders or clearly invalid tokens we must ignore
+        invalid_skus = {
+            'UNKNOWN', 'N/A', 'NULL', 'NONE', '', 'TBD', 'PENDING', 'MANUAL'
+        }
+        if sku_upper in invalid_skus:
+            return False
+
+        # Very small or non-alphanumeric strings are unlikely real SKUs
+        # Keep this conservative to avoid over-filtering
+        has_alnum = any(ch.isalnum() for ch in sku_upper)
+        if not has_alnum:
+            return False
+
+        return True
     def _compute_desc_weight(self, normalized_desc: str) -> float:
         """Lightweight token weighting: boost nouns, downweight generic terms.
         Returns a multiplier ~0.9–1.1 to slightly adjust confidences.
@@ -2128,7 +2139,7 @@ class FixacarApp:
                             for pred in year_range_predictions:
                                 base_conf = float(pred.get('confidence', 0.0))
                                 adj_conf = max(0.0, min(1.0, base_conf * desc_weight))
-                                # Construct DB(frequency/global) label from prediction
+                                # Use prebuilt source label from optimizer (DBA or DB), else fallback
                                 db_label = pred.get('source') or f"DB({pred.get('frequency', 0)}/{pred.get('global_frequency', 0)})"
                                 meta = {'start_year': pred.get('start_year'), 'end_year': pred.get('end_year')}
                                 suggestions = self._aggregate_sku_suggestions(
@@ -2151,6 +2162,7 @@ class FixacarApp:
                                 for pred in year_range_predictions:
                                     base_conf = float(pred.get('confidence', 0.0))
                                     adj_conf = max(0.0, min(1.0, base_conf * desc_weight))
+                                    # Use prebuilt source label from optimizer (DBA or DB), else fallback
                                     db_label = pred.get('source') or f"DB({pred.get('frequency', 0)}/{pred.get('global_frequency', 0)})"
                                     meta = {'start_year': pred.get('start_year'), 'end_year': pred.get('end_year')}
                                     suggestions = self._aggregate_sku_suggestions(

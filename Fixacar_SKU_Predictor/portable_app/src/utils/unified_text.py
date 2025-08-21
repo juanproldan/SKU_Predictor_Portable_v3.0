@@ -162,7 +162,7 @@ _common_gender_pairs = {
 }
 
 # Extra known noun genders to enforce adjective agreement even if sheet lacks the entry
-_EXTRA_NOUN_GENDERS = { 'paragolpes': 'm' }
+_EXTRA_NOUN_GENDERS = { 'paragolpes': 'm', 'reflector': 'm', 'puerta': 'f', 'rejilla': 'f' }
 
 
 
@@ -281,12 +281,18 @@ def _apply_adjective_agreement(tokens: list[str], noun_gender: Dict[str, str]) -
         g = None
         for j in range(i+1, min(i+6, n)):
             w = base[j]
+            # Skip other adjectives; we want the nearest real noun
+            if any(w.startswith(st) for st in ADJ_BASES.keys()):
+                continue
             if w in noun_gender_full:
                 g = noun_gender_full[w]
                 break
         if g is None:
             for j in range(i-1, max(-1, i-6), -1):
                 w = base[j]
+                # Skip other adjectives; we want the nearest real noun
+                if any(w.startswith(st) for st in ADJ_BASES.keys()):
+                    continue
                 if w in noun_gender_full:
                     g = noun_gender_full[w]
                     break
@@ -311,7 +317,9 @@ def unified_text_preprocessing(text: str) -> str:
         _phrase_abbrev_map_cache = _load_phrase_abbrev_map()
     if _phrase_abbrev_map_cache:
         for src, dst in _phrase_abbrev_map_cache.items():
-            t = re.sub(rf"(?<![a-z0-9]){re.escape(src)}(?![a-z0-9])", dst, t)
+            # Allow spaces, dots, or slashes between words in the phrase (e.g., 'tra.d.' -> 'tra d')
+            pattern_src = re.escape(src).replace(r'\ ', r'[ .\/]+')
+            t = re.sub(rf"(?<![a-z0-9]){pattern_src}(?![a-z0-9])", dst, t)
     # Step 3: abbreviations expansion (token-level)
     t = _expand_abbreviations(t)
     # Step 4: RESERVED — Equivalencias are NOT used for normalization.
@@ -325,8 +333,8 @@ def unified_text_preprocessing(text: str) -> str:
     global _noun_gender_map_cache
     if _noun_gender_map_cache is None:
         _noun_gender_map_cache = _load_noun_gender_map()
-    if _noun_gender_map_cache:
-        toks = _apply_adjective_agreement(toks, _noun_gender_map_cache)
+    # Always apply agreement; function merges with EXTRAs and tolerates empty dict
+    toks = _apply_adjective_agreement(toks, _noun_gender_map_cache or {})
     # Step 6: final cleanup
     t = ' '.join(toks)
     t = re.sub(r"\s+", " ", t).strip()

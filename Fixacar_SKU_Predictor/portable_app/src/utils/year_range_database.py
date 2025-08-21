@@ -80,6 +80,133 @@ class YearRangeDatabaseOptimizer:
         except (ValueError, TypeError):
             target_year = None
 
+        # New: aggregated per-SKU results with strict year and exact description
+        try:
+            maker_l = str(maker).lower()
+            series_l = str(series).lower() if series is not None else ''
+            desc_l = str(description).lower()
+
+            def _derive_series_token(s: str) -> str:
+                import re
+                if not s:
+                    return ''
+                m = re.match(r"^\s*([0-9a-zA-Z]+)", s)
+                if m:
+                    return m.group(1)
+                t = s.split('(')[0]
+                t = t.split('/')[0]
+                return t.strip()
+
+            def _aggregate_exact(table: str, fuzzy_series: bool = False):
+                label_prefix = 'DBA' if table.endswith('_Aprobado') else 'DB'
+                suffix = ' ~series' if fuzzy_series else ''
+                rows = []
+                if fuzzy_series and series_l:
+                    pattern1 = f"%{series_l}%"
+                    token = _derive_series_token(series_l)
+                    pattern2 = f"%{token}%" if token else '%'
+                    cursor.execute(f"""
+                        SELECT referencia,
+                               SUM(frequency) AS sum_freq,
+                               MIN(start_year) AS min_sy,
+                               MAX(end_year)   AS max_ey,
+                               MAX(global_sku_frequency) AS gf
+                        FROM {table}
+                        WHERE maker = ?
+                          AND (series LIKE ? OR series LIKE ?)
+                          AND (descripcion = ? OR normalized_descripcion = ?)
+                          AND ? BETWEEN start_year AND end_year
+                          AND referencia IS NOT NULL AND LENGTH(TRIM(referencia)) > 0
+                        GROUP BY referencia
+                        ORDER BY sum_freq DESC
+                        LIMIT ?
+                    """, (maker_l, pattern1, pattern2, desc_l, desc_l, model, limit))
+                else:
+                    cursor.execute(f"""
+                        SELECT referencia,
+                               SUM(frequency) AS sum_freq,
+                               MIN(start_year) AS min_sy,
+                               MAX(end_year)   AS max_ey,
+                               MAX(global_sku_frequency) AS gf
+                        FROM {table}
+                        WHERE maker = ?
+                          AND series = ?
+                          AND (descripcion = ? OR normalized_descripcion = ?)
+                          AND ? BETWEEN start_year AND end_year
+                          AND referencia IS NOT NULL AND LENGTH(TRIM(referencia)) > 0
+                        GROUP BY referencia
+                        ORDER BY sum_freq DESC
+                        LIMIT ?
+                    """, (maker_l, series_l, desc_l, desc_l, model, limit))
+                for referencia, sum_freq, min_sy, max_ey, gf in cursor.fetchall():
+                    conf = self._calculate_year_range_confidence(int(sum_freq or 0), min_sy, max_ey, target_year, 'exact')
+                    rows.append({
+                        'sku': referencia,
+                        'frequency': int(sum_freq or 0),
+                        'global_frequency': int(gf or 0),
+                        'confidence': conf,
+                        'source': f"{label_prefix}({int(sum_freq or 0)}/{int(gf or 0)}){suffix}",
+                        'year_range': f"{min_sy}-{max_ey}",
+                        'start_year': min_sy,
+                        'end_year': max_ey,
+                        'fuzzy_series': fuzzy_series,
+                    })
+                return rows
+
+            def _aggregate_maker_only(table: str):
+                label_prefix = 'DBA' if table.endswith('_Aprobado') else 'DB'
+                rows = []
+                cursor.execute(f"""
+                    SELECT referencia,
+                           SUM(frequency) AS sum_freq,
+                           MIN(start_year) AS min_sy,
+                           MAX(end_year)   AS max_ey,
+                           MAX(global_sku_frequency) AS gf
+                    FROM {table}
+                    WHERE maker = ?
+                      AND (descripcion = ? OR normalized_descripcion = ?)
+                      AND ? BETWEEN start_year AND end_year
+                      AND referencia IS NOT NULL AND LENGTH(TRIM(referencia)) > 0
+                    GROUP BY referencia
+                    ORDER BY sum_freq DESC
+                    LIMIT ?
+                """, (maker_l, desc_l, desc_l, model, limit))
+                for referencia, sum_freq, min_sy, max_ey, gf in cursor.fetchall():
+                    conf = self._calculate_year_range_confidence(int(sum_freq or 0), min_sy, max_ey, target_year, 'fuzzy')
+                    rows.append({
+                        'sku': referencia,
+                        'frequency': int(sum_freq or 0),
+                        'global_frequency': int(gf or 0),
+                        'confidence': conf,
+                        'source': f"{label_prefix}({int(sum_freq or 0)}/{int(gf or 0)})",
+                        'year_range': f"{min_sy}-{max_ey}",
+                        'start_year': min_sy,
+                        'end_year': max_ey,
+                        'fuzzy_series': False,
+                    })
+                return rows
+
+            # 1) Aprobado exact series
+            predictions = _aggregate_exact('sku_year_ranges_Aprobado', fuzzy_series=False)
+            # 2) Aprobado fuzzy series
+            if not predictions and series_l:
+                predictions = _aggregate_exact('sku_year_ranges_Aprobado', fuzzy_series=True)
+            # 3) Aprobado maker-only
+            if not predictions:
+                predictions = _aggregate_maker_only('sku_year_ranges_Aprobado')
+            # 4-6) Fallback to full table
+            if not predictions:
+                predictions = _aggregate_exact('sku_year_ranges', fuzzy_series=False)
+            if not predictions and series_l:
+                predictions = _aggregate_exact('sku_year_ranges', fuzzy_series=True)
+            if not predictions:
+                predictions = _aggregate_maker_only('sku_year_ranges')
+
+            if predictions:
+                return predictions
+        except Exception as e:
+            self.logger.error(f"Aggregated year-range query failed: {e}")
+
         # Try exact description match first (highest confidence)
         try:
             cursor.execute("""

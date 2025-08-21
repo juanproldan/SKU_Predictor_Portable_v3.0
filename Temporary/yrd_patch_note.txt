@@ -1,0 +1,7 @@
+Planned patch to utils/year_range_database.get_sku_predictions_year_range:
+- Aggregate per-SKU frequency across all rows valid for the target year
+- Prefer _Aprobado table, label as DBA(x/y); fall back to full table, label as DB(x/y)
+- Apply series fuzzy fallback via LIKE; mark predictions with '~series' hint in 'source'
+- Keep exact description only
+- Return min(start_year) and max(end_year) of grouped rows as display range
+
