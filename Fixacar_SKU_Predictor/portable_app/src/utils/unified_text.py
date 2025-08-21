@@ -277,18 +277,24 @@ def _apply_adjective_agreement(tokens: list[str], noun_gender: Dict[str, str]) -
                 break
         if not match:
             continue
-        # Find nearest noun to the right, else to the left, that exists in noun_gender map
+        # Prefer immediate-left noun (common pattern: 'bocel trasero puerta ...')
         g = None
-        for j in range(i+1, min(i+6, n)):
-            w = base[j]
-            # Skip other adjectives; we want the nearest real noun
-            if any(w.startswith(st) for st in ADJ_BASES.keys()):
-                continue
-            if w in noun_gender_full:
-                g = noun_gender_full[w]
-                break
+        if i-1 >= 0:
+            w_left1 = base[i-1]
+            if w_left1 in noun_gender_full:
+                g = noun_gender_full[w_left1]
+        # Otherwise search to the right first, then further left
         if g is None:
-            for j in range(i-1, max(-1, i-6), -1):
+            for j in range(i+1, min(i+6, n)):
+                w = base[j]
+                # Skip other adjectives; we want the nearest real noun
+                if any(w.startswith(st) for st in ADJ_BASES.keys()):
+                    continue
+                if w in noun_gender_full:
+                    g = noun_gender_full[w]
+                    break
+        if g is None:
+            for j in range(i-2, max(-1, i-6), -1):
                 w = base[j]
                 # Skip other adjectives; we want the nearest real noun
                 if any(w.startswith(st) for st in ADJ_BASES.keys()):

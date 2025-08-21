@@ -382,6 +382,15 @@ def load_abbreviations_map(text_processing_path):
         logger.error(f"Error loading abbreviations map: {e}")
         raise
 
+def _series_key(s: str) -> str:
+    """Canonical key for series matching: uppercase, strip, collapse inner spaces.
+    This makes mappings robust to accidental double spaces or trailing spaces.
+    """
+    if s is None:
+        return ''
+    import re
+    return re.sub(r"\s+", " ", str(s).strip()).upper()
+
 def load_series_normalization_map(text_processing_path):
     """
     Load series normalization mapping from Text_Processing_Rules.xlsx Series tab.
@@ -399,7 +408,7 @@ def load_series_normalization_map(text_processing_path):
         series_map = {}
         # Iterate rows; collect non-empty cells
         for row in sh.iter_rows(min_row=2, values_only=True):
-            series_variations = [str(v).strip() for v in row if v is not None and str(v).strip()]
+            series_variations = [re.sub(r"\s+"," ", str(v).strip()) for v in row if v is not None and str(v).strip()]
 
             if len(series_variations) < 2:
                 continue  # Need at least 2 variations to create mappings
@@ -473,19 +482,35 @@ def normalize_series_preprocessing(maker, series, series_map):
 
     # Clean inputs
     maker_clean = maker.upper().strip() if maker else "*"
-    series_clean = series.upper().strip()
+    import re
+    series_clean = re.sub(r"\s+", " ", series.upper().strip())
 
     # Try maker-specific mapping first
     maker_key = (maker_clean, series_clean)
+    # Also try with collapsed-space key
+    maker_key_norm = (maker_clean, _series_key(series))
     if maker_key in series_map:
         normalized = series_map[maker_key]
+        logging.getLogger(__name__).debug(f"Series normalized: {maker}/{series} → {normalized} (maker-specific)")
+        return normalized
+    if maker_key_norm in series_map:
+        normalized = series_map[maker_key_norm]
+        logging.getLogger(__name__).debug(f"Series normalized: {maker}/{series} → {normalized} (maker-specific, space-collapsed)")
+        return normalized
         logging.getLogger(__name__).debug(f"Series normalized: {maker}/{series} → {normalized} (maker-specific)")
         return normalized
 
     # Try generic mapping (applies to all makers)
     generic_key = ("*", series_clean)
+    generic_key_norm = ("*", _series_key(series))
     if generic_key in series_map:
         normalized = series_map[generic_key]
+        logging.getLogger(__name__).debug(f"Series normalized: {maker}/{series} → {normalized} (generic)")
+        return normalized
+    if generic_key_norm in series_map:
+        normalized = series_map[generic_key_norm]
+        logging.getLogger(__name__).debug(f"Series normalized: {maker}/{series} → {normalized} (generic, space-collapsed)")
+        return normalized
         logging.getLogger(__name__).debug(f"Series normalized: {maker}/{series} → {normalized} (generic)")
         return normalized
 
