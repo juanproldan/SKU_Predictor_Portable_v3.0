@@ -24,6 +24,8 @@ This document is the single source of truth for the Fixacar SKU Predictor v3.0 p
   - Adjective agreement: direction/location adjectives (trasero/a, delantero/a, izquierdo/a, derecho/a) agree with the nearest known noun gender (Noun_Gender sheet + internal extras for 'puerta', 'rejilla', 'paragolpes', 'reflector').
 - Maker, series, descripcion, normalized_descripcion are consistently lowercase in DB.
 
+- Series normalization is space-insensitive: inputs and mapping keys are uppercased, trimmed, and inner whitespace is collapsed (e.g., 'CX  30' → 'CX 30'). This prevents duplicates caused by stray spaces.
+
 ### 3.1 Model year policy (critical)
 - Valid model years = 1990 through current_year + 2 (e.g., 2027 at time of writing).
   - Anything outside this interval is treated as missing and excluded from aggregations.
@@ -32,6 +34,8 @@ This document is the single source of truth for the Fixacar SKU Predictor v3.0 p
 
 - Early year gating: records with model outside [year_start, current_year+2] are skipped before insertion (configurable via Source_Files/config.json).
 - VIN prefix and SKU aggregates rely on in-range data only by construction (no duplicate year filters needed downstream).
+- VIN prefix grouping in vin_prefix_frequencies uses the 11-character prefix (positions 1–11) with positions 12–17 masked as 'X'. Distinct characters at any position 1–11 (e.g., position 8 differing between '3MVDM2W7ANL' and '3MVDM2WLANL') will produce separate lines by design, as they encode different configurations.
+
 
 ## 4. VIN Handling
 - VIN normalization only fixes characters (I→1, O/Q→0; uppercase).
