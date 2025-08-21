@@ -18,9 +18,10 @@ This document is the single source of truth for the Fixacar SKU Predictor v3.0 p
 - Always rebuild processed_consolidado.db from Consolidado.json (no reuse of old DBs).
 - Normalize text centrally via portable_app/src/utils/unified_text.py:
   - Lowercase and accent-strip for processing.
-  - Abbreviation expansion and equivalencias (Text_Processing_Rules.xlsx).
+  - Abbreviation expansion (token-level) and phrase-level expansions (Abbreviations_Phrases) with support for dots/slashes as separators (e.g., 'tra.d.' -> 'tra d'); equivalencias only for matching groups, not canonicalization.
   - Series normalization via Series tab (map variants to canonical, case-insensitive).
   - Targeted adjective agreement using Noun_Gender entries (no spaCy).
+  - Adjective agreement: direction/location adjectives (trasero/a, delantero/a, izquierdo/a, derecho/a) agree with the nearest known noun gender (Noun_Gender sheet + internal extras for 'puerta', 'rejilla', 'paragolpes', 'reflector').
 - Maker, series, descripcion, normalized_descripcion are consistently lowercase in DB.
 
 ### 3.1 Model year policy (critical)
