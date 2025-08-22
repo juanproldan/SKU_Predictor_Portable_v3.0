@@ -16,7 +16,7 @@ echo Checking Python (Windows Launcher)...
 py -3.11 --version >nul 2>&1
 if errorlevel 1 (
   echo [ERROR] Python 3.11 not found via 'py -3.11'. Please install Python 3.11.
-  pause
+  if not defined SKIP_PAUSE pause
   popd
   exit /b 1
 )
@@ -26,13 +26,13 @@ set "ERR=%ERRORLEVEL%"
 type "%LOGFILE%"
 if not "%ERR%"=="0" (
   echo [ERROR] SKU training failed. See log above.
-  pause
+  if not defined SKIP_PAUSE pause
   popd
   exit /b %ERR%
 )
 
 echo [OK] SKU model trained.
-pause
+if not defined SKIP_PAUSE pause
 popd
 exit /b 0
 

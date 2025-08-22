@@ -19,7 +19,7 @@ py -3.11 --version >nul 2>&1
 if errorlevel 1 (
   echo [ERROR] Python 3.11 not found via 'py -3.11'. Please install Python 3.11.
   echo Tip: Run 0_install_packages.bat first.
-  pause
+  if not defined SKIP_PAUSE pause
   popd
   exit /b 1
 )
@@ -30,7 +30,7 @@ set "ERR=%ERRORLEVEL%"
 type "%LOG_PROCESS%"
 if not "%ERR%"=="0" (
   echo [ERROR] Processing failed. See log above.
-  pause
+  if not defined SKIP_PAUSE pause
   popd
   exit /b %ERR%
 )
@@ -45,13 +45,13 @@ set "ERR_ABBR=%ERRORLEVEL%"
 type "%LOG_ABBR%"
 if not "%ERR_ABBR%"=="0" (
   echo [ERROR] NewAbbreviations generation failed. See log above.
-  pause
+  if not defined SKIP_PAUSE pause
   popd
   exit /b %ERR_ABBR%
 )
 
 echo [OK] Processing complete and NewAbbreviations regenerated.
-pause
+if not defined SKIP_PAUSE pause
 popd
 exit /b 0
 

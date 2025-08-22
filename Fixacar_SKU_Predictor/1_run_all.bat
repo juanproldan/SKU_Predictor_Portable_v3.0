@@ -20,14 +20,22 @@ if exist "0_install_packages.bat" (
 
 set LOGDIR=%BASE_DIR%\logs
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
-set RUNSTAMP=%DATE:~10,4%-%DATE:~4,2%-%DATE:~7,2%_%TIME:~0,2%-%TIME:~3,2%-%TIME:~6,2%
-set RUNSTAMP=%RUNSTAMP: =0%
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH-mm-ss"') do set RUNSTAMP=%%i
 set MASTER_LOG=%LOGDIR%\run_all_%RUNSTAMP%.log
 
-echo ============================================= | tee -a "%MASTER_LOG%"
-echo Starting 1_run_all.bat at %DATE% %TIME%       | tee -a "%MASTER_LOG%"
-echo BASE_DIR=%BASE_DIR%                            | tee -a "%MASTER_LOG%"
-echo ============================================= | tee -a "%MASTER_LOG%"
+REM Display header and also log to file
+(echo =============================================
+ echo Starting 1_run_all.bat at %DATE% %TIME%
+ echo BASE_DIR=%BASE_DIR%
+ echo =============================================) > "%MASTER_LOG%"
+
+echo =============================================
+echo Starting 1_run_all.bat at %DATE% %TIME%
+echo BASE_DIR=%BASE_DIR%
+echo =============================================
+
+REM Skip pauses inside step scripts
+set SKIP_PAUSE=1
 
 set STEP_OK=1
 
@@ -43,28 +51,36 @@ if %STEP_OK%==0 goto :fail
 call :run_step "4_run_sku_trainer.bat" || set STEP_OK=0
 if %STEP_OK%==0 goto :fail
 
-echo [OK] All steps completed successfully. | tee -a "%MASTER_LOG%"
-goto :eof
+(echo [OK] All steps completed successfully.)>> "%MASTER_LOG%"
+echo [OK] All steps completed successfully.
+goto :end
 
 :run_step
 set STEP=%~1
-echo. | tee -a "%MASTER_LOG%"
-echo --- Running %STEP% --- | tee -a "%MASTER_LOG%"
+echo.
+echo --- Running %STEP% ---
+(echo. & echo --- Running %STEP% ---)>> "%MASTER_LOG%"
 if not exist "%BASE_DIR%\%STEP%" (
-  echo [ERROR] Missing %STEP% in %BASE_DIR% | tee -a "%MASTER_LOG%"
+  echo [ERROR] Missing %STEP% in %BASE_DIR%
+  (echo [ERROR] Missing %STEP% in %BASE_DIR%)>> "%MASTER_LOG%"
   exit /b 1
 )
-call "%BASE_DIR%\%STEP%" >> "%MASTER_LOG%" 2>&1
-if errorlevel 1 (
-  echo [ERROR] %STEP% failed. See log: %MASTER_LOG% | tee -a "%MASTER_LOG%"
-  exit /b 1
+REM Run step without redirect so console shows progress; steps themselves log.
+call "%BASE_DIR%\%STEP%"
+set ERR=%ERRORLEVEL%
+if not "%ERR%"=="0" (
+  echo [ERROR] %STEP% failed with code %ERR%.
+  (echo [ERROR] %STEP% failed with code %ERR%.)>> "%MASTER_LOG%"
+  exit /b %ERR%
 ) else (
-  echo [OK] %STEP% finished. | tee -a "%MASTER_LOG%"
+  echo [OK] %STEP% finished.
+  (echo [OK] %STEP% finished.)>> "%MASTER_LOG%"
 )
 exit /b 0
 
 :fail
-echo [FAIL] Pipeline aborted. See log: %MASTER_LOG% | tee -a "%MASTER_LOG%"
+echo [FAIL] Pipeline aborted. See log: %MASTER_LOG%
+(echo [FAIL] Pipeline aborted.)>> "%MASTER_LOG%"
 exit /b 1
 
 :end
